@@ -1,0 +1,81 @@
+name: Lint
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          severity: warning
+          ignore_paths: '.git .github'
+
+  validate-skills:
+    name: Validate Skills
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate SKILL.md frontmatter
+        run: |
+          echo "Validating SKILL.md files..."
+
+          for skill_dir in skills/*/; do
+            skill_name=$(basename "${skill_dir}")
+            skill_file="${skill_dir}SKILL.md"
+
+            if [ ! -f "${skill_file}" ]; then
+              echo "❌ Missing SKILL.md in ${skill_name}"
+              exit 1
+            fi
+
+            # Check frontmatter exists
+            if ! head -1 "${skill_file}" | grep -q '^---$'; then
+              echo "❌ ${skill_name}: Missing YAML frontmatter"
+              exit 1
+            fi
+
+            # Extract frontmatter
+            frontmatter=$(awk '/^---$/{if(++n==2)exit;next}n==1' "${skill_file}")
+
+            # Check required fields
+            if ! echo "${frontmatter}" | grep -q '^name:'; then
+              echo "❌ ${skill_name}: Missing 'name' field"
+              exit 1
+            fi
+
+            if ! echo "${frontmatter}" | grep -q '^description:'; then
+              echo "❌ ${skill_name}: Missing 'description' field"
+              exit 1
+            fi
+
+            # Validate name format (lowercase, hyphens only)
+            name_value=$(echo "${frontmatter}" | awk '/^name:/ {print $2}')
+            if ! echo "${name_value}" | grep -qE '^[a-z0-9-]+$'; then
+              echo "❌ ${skill_name}: name must be lowercase with hyphens only"
+              exit 1
+            fi
+
+            # Check name length (<64 chars)
+            if [ ${#name_value} -gt 64 ]; then
+              echo "❌ ${skill_name}: name must be less than 64 characters"
+              exit 1
+            fi
+
+            echo "✓ ${skill_name}: Valid"
+          done
+
+          echo ""
+          echo "All skills validated successfully!"

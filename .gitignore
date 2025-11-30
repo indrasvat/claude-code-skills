@@ -1,0 +1,38 @@
+# Backups
+.claude-backup/
+*-backup-*/
+
+# OS
+.DS_Store
+Thumbs.db
+._*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+
+# Local development
+.env
+.env.local
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+.tmp/

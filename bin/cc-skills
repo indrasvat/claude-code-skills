@@ -1,0 +1,478 @@
+#!/usr/bin/env bash
+#
+# cc-skills: Claude Code Skills Manager
+#
+# A forgiving, bulletproof CLI tool to manage Claude Code skills.
+# Handles installation, updates, backups, and restoration seamlessly.
+
+set -eo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SKILLS_REPO_DIR="${SCRIPT_DIR}/skills"
+CLAUDE_SKILLS_DIR="${CLAUDE_SKILLS_DIR:-${HOME}/.claude/skills}"
+CLAUDE_BACKUP_DIR="${CLAUDE_BACKUP_DIR:-${HOME}/.claude/skills-backup}"
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}ℹ${NC} $*"
+}
+
+log_success() {
+    echo -e "${GREEN}✓${NC} $*"
+}
+
+log_warning() {
+    echo -e "${YELLOW}⚠${NC} $*"
+}
+
+log_error() {
+    echo -e "${RED}✗${NC} $*" >&2
+}
+
+# Create backup of a skill
+backup_skill() {
+    local skill_name="$1"
+    local source_path="${CLAUDE_SKILLS_DIR}/${skill_name}"
+    local timestamp=$(date +%Y%m%d-%H%M%S)
+    local backup_path="${CLAUDE_BACKUP_DIR}/${skill_name}-${timestamp}"
+
+    if [ -e "${source_path}" ]; then
+        mkdir -p "${CLAUDE_BACKUP_DIR}"
+        cp -r "${source_path}" "${backup_path}"
+        log_success "Backed up ${skill_name} to ${backup_path}"
+        echo "${backup_path}"
+    else
+        log_warning "Skill ${skill_name} does not exist, skipping backup"
+        echo ""
+    fi
+}
+
+# Install a single skill
+install_skill() {
+    local skill_name="$1"
+    local source_path="${SKILLS_REPO_DIR}/${skill_name}"
+    local target_path="${CLAUDE_SKILLS_DIR}/${skill_name}"
+
+    if [ ! -d "${source_path}" ]; then
+        log_error "Skill ${skill_name} not found in repository"
+        return 1
+    fi
+
+    # Create skills directory if it doesn't exist
+    mkdir -p "${CLAUDE_SKILLS_DIR}"
+
+    # Handle existing installation
+    if [ -L "${target_path}" ]; then
+        local current_target=$(readlink "${target_path}")
+        if [ "${current_target}" == "${source_path}" ]; then
+            log_info "Skill ${skill_name} already installed and up to date"
+            return 0
+        else
+            log_warning "Existing symlink points to different location: ${current_target}"
+            log_info "Removing old symlink"
+            rm "${target_path}"
+        fi
+    elif [ -d "${target_path}" ]; then
+        log_warning "Skill ${skill_name} exists as a directory (not symlink)"
+        backup_path=$(backup_skill "${skill_name}")
+        if [ -n "${backup_path}" ]; then
+            log_info "Removing directory to install symlink"
+            rm -rf "${target_path}"
+        else
+            log_error "Failed to backup ${skill_name}, aborting"
+            return 1
+        fi
+    elif [ -f "${target_path}" ]; then
+        log_error "${target_path} is a file! This should not happen"
+        return 1
+    fi
+
+    # Create symlink
+    ln -s "${source_path}" "${target_path}"
+    log_success "Installed ${skill_name}"
+}
+
+# Uninstall a single skill
+uninstall_skill() {
+    local skill_name="$1"
+    local target_path="${CLAUDE_SKILLS_DIR}/${skill_name}"
+
+    if [ -L "${target_path}" ]; then
+        rm "${target_path}"
+        log_success "Uninstalled ${skill_name}"
+    elif [ -d "${target_path}" ]; then
+        log_warning "${skill_name} is a directory (not symlink), not removing"
+    elif [ ! -e "${target_path}" ]; then
+        log_info "${skill_name} not installed"
+    fi
+}
+
+# List all skills in repository
+list_skills() {
+    log_info "Skills available in ${SCRIPT_DIR}:"
+    echo ""
+
+    if [ ! -d "${SKILLS_REPO_DIR}" ]; then
+        log_error "Skills directory not found: ${SKILLS_REPO_DIR}"
+        return 1
+    fi
+
+    local count=0
+    for skill_dir in "${SKILLS_REPO_DIR}"/*; do
+        if [ -d "${skill_dir}" ]; then
+            local skill_name=$(basename "${skill_dir}")
+            local skill_md="${skill_dir}/SKILL.md"
+
+            if [ -f "${skill_md}" ]; then
+                # Extract description from YAML frontmatter
+                local description=$(awk '/^description:/ {sub(/^description: */, ""); print; exit}' "${skill_md}")
+
+                # Check if installed
+                local status=""
+                if [ -L "${CLAUDE_SKILLS_DIR}/${skill_name}" ]; then
+                    status="${GREEN}[installed]${NC}"
+                else
+                    status="${YELLOW}[not installed]${NC}"
+                fi
+
+                echo -e "  ${BLUE}${skill_name}${NC} ${status}"
+                echo -e "    ${description}"
+                echo ""
+                count=$((count + 1))
+            fi
+        fi
+    done
+
+    if [ ${count} -eq 0 ]; then
+        log_warning "No skills found in repository"
+    else
+        log_success "Found ${count} skill(s)"
+    fi
+}
+
+# Show installation status
+show_status() {
+    log_info "Claude Code Skills Status"
+    echo ""
+    echo "Repository: ${SCRIPT_DIR}"
+    echo "Skills directory: ${CLAUDE_SKILLS_DIR}"
+    echo "Backup directory: ${CLAUDE_BACKUP_DIR}"
+    echo ""
+
+    if [ ! -d "${CLAUDE_SKILLS_DIR}" ]; then
+        log_warning "Skills directory does not exist"
+        return 0
+    fi
+
+    log_info "Installed skills:"
+    echo ""
+
+    local count=0
+    for skill_link in "${CLAUDE_SKILLS_DIR}"/*; do
+        if [ -e "${skill_link}" ]; then
+            local skill_name=$(basename "${skill_link}")
+
+            if [ -L "${skill_link}" ]; then
+                local target=$(readlink "${skill_link}")
+                local status=""
+
+                if [ "${target}" == "${SKILLS_REPO_DIR}/${skill_name}" ]; then
+                    status="${GREEN}✓ symlinked to repository${NC}"
+                else
+                    status="${YELLOW}⚠ symlinked to: ${target}${NC}"
+                fi
+
+                echo -e "  ${BLUE}${skill_name}${NC} ${status}"
+                count=$((count + 1))
+            elif [ -d "${skill_link}" ]; then
+                echo -e "  ${BLUE}${skill_name}${NC} ${YELLOW}⚠ directory (not symlink)${NC}"
+                count=$((count + 1))
+            fi
+        fi
+    done
+
+    if [ ${count} -eq 0 ]; then
+        log_info "No skills installed"
+    else
+        echo ""
+        log_success "${count} skill(s) installed"
+    fi
+
+    # Check for backups
+    if [ -d "${CLAUDE_BACKUP_DIR}" ]; then
+        local backup_count=$(find "${CLAUDE_BACKUP_DIR}" -maxdepth 1 -type d | wc -l | tr -d ' ')
+        backup_count=$((backup_count - 1)) # Subtract the backup dir itself
+
+        if [ ${backup_count} -gt 0 ]; then
+            echo ""
+            log_info "Found ${backup_count} backup(s) in ${CLAUDE_BACKUP_DIR}"
+        fi
+    fi
+
+    return 0
+}
+
+# Install all skills
+cmd_install() {
+    log_info "Installing Claude Code skills from ${SCRIPT_DIR}"
+    echo ""
+
+    if [ ! -d "${SKILLS_REPO_DIR}" ]; then
+        log_error "Skills directory not found: ${SKILLS_REPO_DIR}"
+        exit 1
+    fi
+
+    local installed=0
+    local failed=0
+
+    for skill_dir in "${SKILLS_REPO_DIR}"/*; do
+        if [ -d "${skill_dir}" ]; then
+            local skill_name=$(basename "${skill_dir}")
+            if install_skill "${skill_name}"; then
+                installed=$((installed + 1))
+            else
+                failed=$((failed + 1))
+            fi
+        fi
+    done
+
+    echo ""
+    if [ ${failed} -eq 0 ]; then
+        log_success "Installation complete! Installed ${installed} skill(s)"
+        echo ""
+        log_info "Skills are now available in Claude Code"
+        log_info "To update in the future, run: cc-skills update"
+    else
+        log_error "Installation completed with errors: ${installed} succeeded, ${failed} failed"
+        exit 1
+    fi
+}
+
+# Update skills (git pull + reinstall)
+cmd_update() {
+    log_info "Updating Claude Code skills"
+    echo ""
+
+    # Check if we're in a git repository
+    if ! git -C "${SCRIPT_DIR}" rev-parse --git-dir > /dev/null 2>&1; then
+        log_error "Not a git repository: ${SCRIPT_DIR}"
+        log_info "Skipping git pull, will reinstall existing skills"
+    else
+        log_info "Pulling latest changes from repository..."
+        if git -C "${SCRIPT_DIR}" pull; then
+            log_success "Repository updated"
+        else
+            log_warning "Git pull failed, continuing with reinstall"
+        fi
+        echo ""
+    fi
+
+    # Reinstall all skills
+    cmd_install
+}
+
+# Uninstall all skills
+cmd_uninstall() {
+    log_warning "This will remove all skill symlinks from ${CLAUDE_SKILLS_DIR}"
+    log_info "Backups will be preserved in ${CLAUDE_BACKUP_DIR}"
+    echo ""
+    read -r -p "Continue? (y/N) " -n 1
+    echo ""
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Uninstall cancelled"
+        exit 0
+    fi
+
+    local uninstalled=0
+
+    for skill_dir in "${SKILLS_REPO_DIR}"/*; do
+        if [ -d "${skill_dir}" ]; then
+            local skill_name=$(basename "${skill_dir}")
+            uninstall_skill "${skill_name}"
+            uninstalled=$((uninstalled + 1))
+        fi
+    done
+
+    echo ""
+    log_success "Uninstalled ${uninstalled} skill(s)"
+}
+
+# Restore from backup
+cmd_restore() {
+    if [ ! -d "${CLAUDE_BACKUP_DIR}" ]; then
+        log_error "No backup directory found: ${CLAUDE_BACKUP_DIR}"
+        exit 1
+    fi
+
+    log_info "Available backups in ${CLAUDE_BACKUP_DIR}:"
+    echo ""
+
+    local backups=()
+    local index=1
+
+    for backup_dir in "${CLAUDE_BACKUP_DIR}"/*; do
+        if [ -d "${backup_dir}" ]; then
+            local backup_name=$(basename "${backup_dir}")
+            echo "  ${index}. ${backup_name}"
+            backups+=("${backup_dir}")
+            index=$((index + 1))
+        fi
+    done
+
+    if [ ${#backups[@]} -eq 0 ]; then
+        log_info "No backups found"
+        exit 0
+    fi
+
+    echo ""
+    read -r -p "Enter backup number to restore (or 'q' to quit): " choice
+
+    if [[ "${choice}" == "q" ]]; then
+        log_info "Restore cancelled"
+        exit 0
+    fi
+
+    if [[ ! "${choice}" =~ ^[0-9]+$ ]] || [ "${choice}" -lt 1 ] || [ "${choice}" -gt ${#backups[@]} ]; then
+        log_error "Invalid selection"
+        exit 1
+    fi
+
+    local selected_backup="${backups[$((choice-1))]}"
+    local backup_basename=$(basename "${selected_backup}")
+    local skill_name="${backup_basename%-*}"  # Remove timestamp suffix
+
+    log_info "Restoring ${skill_name} from ${backup_basename}"
+
+    # Remove existing
+    if [ -n "${skill_name}" ] && [ -e "${CLAUDE_SKILLS_DIR}/${skill_name}" ]; then
+        rm -rf "${CLAUDE_SKILLS_DIR:?}/${skill_name}"
+    fi
+
+    # Restore from backup
+    cp -r "${selected_backup}" "${CLAUDE_SKILLS_DIR}/${skill_name}"
+
+    log_success "Restored ${skill_name}"
+}
+
+# Backup all current skills
+cmd_backup() {
+    log_info "Creating backup of all current skills"
+    echo ""
+
+    if [ ! -d "${CLAUDE_SKILLS_DIR}" ]; then
+        log_warning "Skills directory does not exist: ${CLAUDE_SKILLS_DIR}"
+        exit 0
+    fi
+
+    local count=0
+
+    for skill_path in "${CLAUDE_SKILLS_DIR}"/*; do
+        if [ -e "${skill_path}" ]; then
+            local skill_name=$(basename "${skill_path}")
+            backup_skill "${skill_name}"
+            count=$((count + 1))
+        fi
+    done
+
+    echo ""
+    if [ ${count} -gt 0 ]; then
+        log_success "Backed up ${count} skill(s)"
+    else
+        log_info "No skills to backup"
+    fi
+}
+
+# Show help
+cmd_help() {
+    cat << EOF
+cc-skills: Claude Code Skills Manager
+
+A forgiving, bulletproof CLI tool to manage Claude Code skills.
+
+Usage:
+    cc-skills install      Install skills from this repository
+    cc-skills update       Update skills (git pull + reinstall)
+    cc-skills uninstall    Remove symlinks (keeps backups)
+    cc-skills restore      Restore from backup
+    cc-skills status       Show installation status
+    cc-skills list         List available skills in repository
+    cc-skills backup       Create backup of current skills
+    cc-skills help         Show this help message
+
+Environment Variables:
+    CLAUDE_SKILLS_DIR     Target directory (default: ~/.claude/skills)
+    CLAUDE_BACKUP_DIR     Backup directory (default: ~/.claude/skills-backup)
+
+Examples:
+    # Initial installation
+    cc-skills install
+
+    # Update to latest version
+    cc-skills update
+
+    # Check what's installed
+    cc-skills status
+
+    # Backup before making changes
+    cc-skills backup
+
+    # Restore from a backup
+    cc-skills restore
+
+The tool is designed to be forgiving and safe:
+- Always creates backups before overwriting
+- Handles symlinks, directories, and missing files gracefully
+- Never deletes user data without confirmation
+- Provides clear status and error messages
+
+EOF
+}
+
+# Main command dispatcher
+main() {
+    local cmd="${1:-help}"
+
+    case "${cmd}" in
+        install)
+            cmd_install
+            ;;
+        update)
+            cmd_update
+            ;;
+        uninstall)
+            cmd_uninstall
+            ;;
+        restore)
+            cmd_restore
+            ;;
+        status)
+            show_status
+            ;;
+        list)
+            list_skills
+            ;;
+        backup)
+            cmd_backup
+            ;;
+        help|--help|-h)
+            cmd_help
+            ;;
+        *)
+            log_error "Unknown command: ${cmd}"
+            echo ""
+            cmd_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

@@ -428,4 +428,4 @@ Before committing a new skill:
 For more guidance:
 - [Skill Authoring](skill-authoring.md)
 - [Troubleshooting](troubleshooting.md)
-- [Official Anthropic Docs](https://docs.anthropic.com/en/docs/build-with-claude/agent-skills)
+- [Agent Skills Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)

@@ -527,4 +527,4 @@ If things don't work:
 For more guidance, see:
 - [Best Practices](best-practices.md)
 - [Troubleshooting](troubleshooting.md)
-- [Official Anthropic Skill Docs](https://docs.anthropic.com/en/docs/build-with-claude/agent-skills)
+- [Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)

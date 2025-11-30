@@ -43,10 +43,19 @@ BRANCH="${BRANCH:-main}"
 
 # Auto-detect best repository URL (SSH if available, HTTPS fallback)
 if [ -z "${REPO_URL}" ]; then
-    # Test SSH access to GitHub
-    if ssh -T git@github.com -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 2>&1 | grep -q "successfully authenticated"; then
-        REPO_URL="git@github.com:indrasvat/claude-code-skills.git"
+    # Check for SSH keys first
+    if [ -f ~/.ssh/id_rsa ] || [ -f ~/.ssh/id_ed25519 ] || [ -f ~/.ssh/id_ecdsa ]; then
+        # Test SSH access with existing known_hosts only (no auto-accept for security)
+        # Capture output to avoid pipefail issues (ssh exits with 1 even on success)
+        ssh_test=$(ssh -T git@github.com -o ConnectTimeout=5 -o StrictHostKeyChecking=yes 2>&1 || true)
+        if echo "${ssh_test}" | grep -q "successfully authenticated"; then
+            REPO_URL="git@github.com:indrasvat/claude-code-skills.git"
+        else
+            # SSH keys exist but GitHub not in known_hosts or auth failed
+            REPO_URL="https://github.com/indrasvat/claude-code-skills.git"
+        fi
     else
+        # No SSH keys found, use HTTPS
         REPO_URL="https://github.com/indrasvat/claude-code-skills.git"
     fi
 fi

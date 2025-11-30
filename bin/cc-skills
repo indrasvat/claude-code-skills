@@ -37,6 +37,19 @@ log_error() {
     echo -e "${RED}✗${NC} $*" >&2
 }
 
+# Safe removal - moves to /tmp instead of rm -rf
+# OS auto-cleans /tmp on reboot, recoverable within session
+safe_remove() {
+    local path="$1"
+    local timestamp
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    local temp_removal="/tmp/claude-skills-removed-${timestamp}-$$"
+
+    if [ -e "${path}" ]; then
+        mv "${path}" "${temp_removal}"
+    fi
+}
+
 # Create backup of a skill
 backup_skill() {
     local skill_name="$1"
@@ -78,14 +91,20 @@ install_skill() {
         else
             log_warning "Existing symlink points to different location: ${current_target}"
             log_info "Removing old symlink"
-            rm "${target_path}"
+            safe_remove "${target_path}"
         fi
     elif [ -d "${target_path}" ]; then
         log_warning "Skill ${skill_name} exists as a directory (not symlink)"
         backup_path=$(backup_skill "${skill_name}")
         if [ -n "${backup_path}" ]; then
-            log_info "Removing directory to install symlink"
-            rm -rf "${target_path}"
+            # Verify target still exists and is a directory before removal (avoid TOCTOU race)
+            if [ -d "${target_path}" ] && [ ! -L "${target_path}" ]; then
+                log_info "Removing directory to install symlink"
+                safe_remove "${target_path}"
+            else
+                log_error "Target path changed during backup, aborting for safety"
+                return 1
+            fi
         else
             log_error "Failed to backup ${skill_name}, aborting"
             return 1
@@ -106,7 +125,7 @@ uninstall_skill() {
     local target_path="${CLAUDE_SKILLS_DIR}/${skill_name}"
 
     if [ -L "${target_path}" ]; then
-        rm "${target_path}"
+        safe_remove "${target_path}"
         log_success "Uninstalled ${skill_name}"
     elif [ -d "${target_path}" ]; then
         log_warning "${skill_name} is a directory (not symlink), not removing"
@@ -350,11 +369,21 @@ cmd_restore() {
     local backup_basename=$(basename "${selected_backup}")
     local skill_name="${backup_basename%-*}"  # Remove timestamp suffix
 
+    # Sanitize skill_name to prevent path traversal
+    skill_name="${skill_name//\//_}"  # Replace slashes with underscores
+    skill_name="${skill_name//../_}"  # Remove parent directory references
+
+    # Validate skill_name doesn't start with special chars
+    if [[ "${skill_name}" =~ ^[.-] ]] || [ -z "${skill_name}" ]; then
+        log_error "Invalid skill name in backup: ${backup_basename}"
+        exit 1
+    fi
+
     log_info "Restoring ${skill_name} from ${backup_basename}"
 
     # Remove existing
-    if [ -n "${skill_name}" ] && [ -e "${CLAUDE_SKILLS_DIR}/${skill_name}" ]; then
-        rm -rf "${CLAUDE_SKILLS_DIR:?}/${skill_name}"
+    if [ -e "${CLAUDE_SKILLS_DIR}/${skill_name}" ]; then
+        safe_remove "${CLAUDE_SKILLS_DIR}/${skill_name}"
     fi
 
     # Restore from backup

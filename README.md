@@ -338,14 +338,14 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 🔗 Resources
 
-- [Claude Code Documentation](https://docs.anthropic.com/en/docs/build-with-claude/claude-code)
-- [Agent Skills Specification](https://docs.anthropic.com/en/docs/build-with-claude/agent-skills)
+- [Claude Code Documentation](https://code.claude.com/docs/en/skills)
+- [Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
+- [Agent Skills Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
 - [Anthropic's Official Skills](https://github.com/anthropics/skills)
-- [Skill Authoring Best Practices](https://docs.anthropic.com/en/docs/build-with-claude/agent-skills/skill-authoring-best-practices)
 
 ## 🙏 Acknowledgments
 
-Built using the [Claude Code Agent Skills framework](https://docs.anthropic.com/en/docs/build-with-claude/agent-skills) by Anthropic.
+Built using the Claude Code Agent Skills framework by Anthropic.
 
 ---
 

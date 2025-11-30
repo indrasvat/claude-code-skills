@@ -471,8 +471,8 @@ print('\n'.join(lines[:10]))
 
 ### Official Resources
 
-- [Claude Code Documentation](https://docs.anthropic.com/en/docs/build-with-claude/claude-code)
-- [Agent Skills Spec](https://docs.anthropic.com/en/docs/build-with-claude/agent-skills)
+- [Claude Code Documentation](https://code.claude.com/docs/en/skills)
+- [Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
 - [Anthropic's Official Skills](https://github.com/anthropics/skills)
 
 ### Report Issues

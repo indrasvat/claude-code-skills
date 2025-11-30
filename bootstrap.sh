@@ -11,11 +11,16 @@
 # Install from a specific branch:
 #   BRANCH=develop bash <(curl -fsSL ...)
 #
-# Custom repository URL:
+# Custom repository URL (auto-detects SSH vs HTTPS by default):
 #   REPO_URL=https://github.com/yourname/your-fork.git bash <(curl -fsSL ...)
+#   REPO_URL=git@github.com:yourname/your-fork.git bash <(curl -fsSL ...)
 #
 # Combined example:
 #   INSTALL_DIR=~/my-skills BRANCH=develop bash <(curl -fsSL ...)
+#
+# For private repositories:
+#   - SSH is automatically used if you have GitHub SSH keys configured
+#   - Otherwise, HTTPS will prompt for credentials (use GitHub token as password)
 #
 # This script:
 #   1. Clones the repository to ~/.config/claude-code-skills (or custom location)
@@ -33,9 +38,18 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO_URL="${REPO_URL:-https://github.com/indrasvat/claude-code-skills.git}"
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/.config/claude-code-skills}"
 BRANCH="${BRANCH:-main}"
+
+# Auto-detect best repository URL (SSH if available, HTTPS fallback)
+if [ -z "${REPO_URL}" ]; then
+    # Test SSH access to GitHub
+    if ssh -T git@github.com -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 2>&1 | grep -q "successfully authenticated"; then
+        REPO_URL="git@github.com:indrasvat/claude-code-skills.git"
+    else
+        REPO_URL="https://github.com/indrasvat/claude-code-skills.git"
+    fi
+fi
 
 # Logging functions
 log_info() {
@@ -60,7 +74,14 @@ echo "════════════════════════�
 echo "  🚀 Claude Code Skills - Bootstrap Installer"
 echo "════════════════════════════════════════════════════════"
 echo ""
-log_info "Repository: ${REPO_URL}"
+
+# Show authentication method
+if [[ "${REPO_URL}" == git@* ]]; then
+    log_info "Repository: ${REPO_URL} (SSH)"
+else
+    log_info "Repository: ${REPO_URL} (HTTPS)"
+fi
+
 log_info "Install to: ${INSTALL_DIR}"
 log_info "Branch: ${BRANCH}"
 echo ""

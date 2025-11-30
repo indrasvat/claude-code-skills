@@ -53,6 +53,8 @@ REPO_URL=https://github.com/yourname/your-fork.git bash <(curl -fsSL https://raw
 INSTALL_DIR=~/my-skills BRANCH=develop bash <(curl -fsSL https://raw.githubusercontent.com/indrasvat/claude-code-skills/main/bootstrap.sh)
 ```
 
+**Private repositories:** The bootstrap script automatically detects if you have SSH keys configured and uses SSH for authentication. Otherwise, it falls back to HTTPS (which will prompt for credentials).
+
 **Security note:** Review the bootstrap script before running:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/indrasvat/claude-code-skills/main/bootstrap.sh | less

@@ -54,7 +54,8 @@ safe_remove() {
 backup_skill() {
     local skill_name="$1"
     local source_path="${CLAUDE_SKILLS_DIR}/${skill_name}"
-    local timestamp=$(date +%Y%m%d-%H%M%S)
+    local timestamp
+    timestamp=$(date +%Y%m%d-%H%M%S)
     local backup_path="${CLAUDE_BACKUP_DIR}/${skill_name}-${timestamp}"
 
     if [ -e "${source_path}" ]; then
@@ -84,7 +85,8 @@ install_skill() {
 
     # Handle existing installation
     if [ -L "${target_path}" ]; then
-        local current_target=$(readlink "${target_path}")
+        local current_target
+        current_target=$(readlink "${target_path}")
         if [ "${current_target}" == "${source_path}" ]; then
             log_info "Skill ${skill_name} already installed and up to date"
             return 0
@@ -147,12 +149,14 @@ list_skills() {
     local count=0
     for skill_dir in "${SKILLS_REPO_DIR}"/*; do
         if [ -d "${skill_dir}" ]; then
-            local skill_name=$(basename "${skill_dir}")
+            local skill_name
+            skill_name=$(basename "${skill_dir}")
             local skill_md="${skill_dir}/SKILL.md"
 
             if [ -f "${skill_md}" ]; then
                 # Extract description from YAML frontmatter
-                local description=$(awk '/^description:/ {sub(/^description: */, ""); print; exit}' "${skill_md}")
+                local description
+                description=$(awk '/^description:/ {sub(/^description: */, ""); print; exit}' "${skill_md}")
 
                 # Check if installed
                 local status=""
@@ -197,10 +201,12 @@ show_status() {
     local count=0
     for skill_link in "${CLAUDE_SKILLS_DIR}"/*; do
         if [ -e "${skill_link}" ]; then
-            local skill_name=$(basename "${skill_link}")
+            local skill_name
+            skill_name=$(basename "${skill_link}")
 
             if [ -L "${skill_link}" ]; then
-                local target=$(readlink "${skill_link}")
+                local target
+                target=$(readlink "${skill_link}")
                 local status=""
 
                 if [ "${target}" == "${SKILLS_REPO_DIR}/${skill_name}" ]; then
@@ -227,7 +233,8 @@ show_status() {
 
     # Check for backups
     if [ -d "${CLAUDE_BACKUP_DIR}" ]; then
-        local backup_count=$(find "${CLAUDE_BACKUP_DIR}" -maxdepth 1 -type d | wc -l | tr -d ' ')
+        local backup_count
+        backup_count=$(find "${CLAUDE_BACKUP_DIR}" -maxdepth 1 -type d | wc -l | tr -d ' ')
         backup_count=$((backup_count - 1)) # Subtract the backup dir itself
 
         if [ ${backup_count} -gt 0 ]; then
@@ -254,7 +261,8 @@ cmd_install() {
 
     for skill_dir in "${SKILLS_REPO_DIR}"/*; do
         if [ -d "${skill_dir}" ]; then
-            local skill_name=$(basename "${skill_dir}")
+            local skill_name
+            skill_name=$(basename "${skill_dir}")
             if install_skill "${skill_name}"; then
                 installed=$((installed + 1))
             else
@@ -315,7 +323,8 @@ cmd_uninstall() {
 
     for skill_dir in "${SKILLS_REPO_DIR}"/*; do
         if [ -d "${skill_dir}" ]; then
-            local skill_name=$(basename "${skill_dir}")
+            local skill_name
+            skill_name=$(basename "${skill_dir}")
             uninstall_skill "${skill_name}"
             uninstalled=$((uninstalled + 1))
         fi
@@ -340,7 +349,8 @@ cmd_restore() {
 
     for backup_dir in "${CLAUDE_BACKUP_DIR}"/*; do
         if [ -d "${backup_dir}" ]; then
-            local backup_name=$(basename "${backup_dir}")
+            local backup_name
+            backup_name=$(basename "${backup_dir}")
             echo "  ${index}. ${backup_name}"
             backups+=("${backup_dir}")
             index=$((index + 1))
@@ -366,7 +376,8 @@ cmd_restore() {
     fi
 
     local selected_backup="${backups[$((choice-1))]}"
-    local backup_basename=$(basename "${selected_backup}")
+    local backup_basename
+    backup_basename=$(basename "${selected_backup}")
     local skill_name="${backup_basename%-*}"  # Remove timestamp suffix
 
     # Sanitize skill_name to prevent path traversal
@@ -406,7 +417,8 @@ cmd_backup() {
 
     for skill_path in "${CLAUDE_SKILLS_DIR}"/*; do
         if [ -e "${skill_path}" ]; then
-            local skill_name=$(basename "${skill_path}")
+            local skill_name
+            skill_name=$(basename "${skill_path}")
             backup_skill "${skill_name}"
             count=$((count + 1))
         fi

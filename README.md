@@ -21,6 +21,17 @@ Drive iTerm2 programmatically using Python scripts to automate terminal tasks, r
 
 [View Examples →](skills/iterm2-driver/examples/)
 
+#### 🤖 **coderabbit**
+Local AI code reviews via CodeRabbit CLI. Use sparingly—rate-limited to 1 review/hour.
+
+**Capabilities:**
+- AI-powered code reviews for security-sensitive changes
+- Detection of concurrency issues and race conditions
+- Memory leak and resource cleanup analysis
+- Complex business logic validation
+- Background execution with monitoring
+- Prioritized findings (critical > major > minor)
+
 ## 🚀 Quick Start
 
 ### One-Command Installation (Recommended)

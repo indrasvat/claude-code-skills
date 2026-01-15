@@ -29,6 +29,7 @@ env/
 # Local development
 .env
 .env.local
+.claude/
 
 # Logs
 *.log

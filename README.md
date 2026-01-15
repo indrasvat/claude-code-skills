@@ -324,9 +324,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 🔗 Resources
 
-- [Claude Code Documentation](https://code.claude.com/docs/en/skills)
-- [Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
-- [Agent Skills Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
+- [Claude Code Plugins](https://code.claude.com/docs/en/plugins)
+- [Claude Code Skills](https://code.claude.com/docs/en/skills)
 - [Anthropic's Official Skills](https://github.com/anthropics/skills)
 
 ## 🙏 Acknowledgments

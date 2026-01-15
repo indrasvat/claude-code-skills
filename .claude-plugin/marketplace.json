@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "indrasvat-skills",
+  "description": "Claude Code skills for iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
+  "owner": {
+    "name": "indrasvat",
+    "email": "indrasvat@users.noreply.github.com"
+  },
+  "plugins": [
+    {
+      "name": "indrasvat-skills",
+      "description": "Claude Code skills for iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
+      "version": "1.0.0",
+      "author": {
+        "name": "indrasvat"
+      },
+      "source": ".",
+      "category": "productivity"
+    }
+  ]
+}

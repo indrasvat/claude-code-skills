@@ -48,13 +48,15 @@ Detailed instructions for Claude on how to use this skill...
 \`\`\`
 ```
 
-### 3. Install and Test
+### 3. Test Your Skill
+
+Test the plugin locally:
 
 ```bash
-../../bin/cc-skills install
+claude --plugin-dir /path/to/claude-code-skills
 ```
 
-Then test in Claude Code by asking questions that should trigger the skill.
+Then ask Claude questions that should trigger the skill.
 
 ## Skill Structure
 
@@ -517,10 +519,9 @@ If things don't work:
 ## Next Steps
 
 1. Create your skill following this guide
-2. Test it thoroughly
-3. Install with `cc-skills install`
-4. Iterate based on real usage
-5. Share improvements!
+2. Test locally with `claude --plugin-dir /path/to/plugin`
+3. Iterate based on real usage
+4. Commit and push to share via `/plugin install`
 
 ---
 

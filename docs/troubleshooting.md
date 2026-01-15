@@ -2,7 +2,50 @@
 
 Common issues and solutions for Claude Code skills installation and usage.
 
-## Installation Issues
+## Plugin Issues (Recommended Installation)
+
+### Plugin Not Loading
+
+**Symptoms**: Skills not available after `/plugin install`.
+
+**Solutions**:
+
+1. **Check plugin is installed**:
+   ```
+   /plugin list
+   ```
+   Should show `indrasvat-skills`
+
+2. **Restart Claude Code** after installing
+
+3. **Reinstall the plugin**:
+   ```
+   /plugin uninstall indrasvat-skills
+   /plugin install https://github.com/indrasvat/claude-code-skills
+   ```
+
+### Skills Not Triggering
+
+**Symptoms**: Claude doesn't use skills even when relevant.
+
+**Solutions**:
+
+1. **Be explicit**: Try "Use the cf-edge skill to deploy this to Cloudflare"
+2. **Check skill description**: Skills trigger based on keyword matching in descriptions
+3. **Restart Claude Code**: Skills are loaded at startup
+
+### Testing Plugin Locally
+
+```bash
+claude --plugin-dir /path/to/claude-code-skills
+```
+
+---
+
+## Bootstrap Installation Issues (Alternative)
+
+<details>
+<summary>Symlink-based installation troubleshooting</summary>
 
 ### Skills Not Being Detected
 
@@ -171,7 +214,11 @@ chmod +x bin/cc-skills
    cc-skills install
    ```
 
-## Skill Usage Issues
+</details>
+
+---
+
+## Skill Usage Issues (All Installation Methods)
 
 ### Skill Not Triggering
 

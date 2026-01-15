@@ -21,6 +21,18 @@ Drive iTerm2 programmatically using Python scripts to automate terminal tasks, r
 
 [View Examples →](skills/iterm2-driver/examples/)
 
+#### ☁️ **cf-edge**
+Deploy web apps, APIs, static sites, and edge functions to Cloudflare's free tier using wrangler and cloudflared CLIs.
+
+**Capabilities:**
+- Host static sites and SPAs on Pages (unlimited bandwidth)
+- Create serverless APIs with Workers (100K req/day)
+- SQL databases with D1 (5GB storage, 5M reads/day)
+- Key-value storage with KV and object storage with R2
+- Expose localhost via Cloudflare Tunnels
+- AI inference with Workers AI (10K neurons/day)
+- All deployments stay within $0 free tier limits
+
 #### 🤖 **coderabbit**
 Local AI code reviews via CodeRabbit CLI. Use sparingly—rate-limited to 1 review/hour.
 

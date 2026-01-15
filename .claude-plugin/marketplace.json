@@ -9,7 +9,8 @@
     {
       "name": "indrasvat-skills",
       "source": "./",
-      "description": "Claude Code skills for iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews"
+      "description": "Claude Code skills for iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
+      "category": "productivity"
     }
   ]
 }

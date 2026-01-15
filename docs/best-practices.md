@@ -195,9 +195,34 @@ Test common edge cases:
 
 ## Installation Management
 
-### Use the CLI Tool
+### Plugin Installation (Recommended)
 
-Always use `cc-skills` for management:
+Install as a Claude Code plugin:
+
+```
+/plugin install https://github.com/indrasvat/claude-code-skills
+```
+
+### Development Testing
+
+Test locally without installing:
+
+```bash
+claude --plugin-dir /path/to/claude-code-skills
+```
+
+### Multi-Machine Sync
+
+Install the plugin on each machine:
+
+```
+/plugin install https://github.com/indrasvat/claude-code-skills
+```
+
+<details>
+<summary>Bootstrap CLI (alternative)</summary>
+
+For symlink-based installation:
 
 ```bash
 # Install
@@ -210,46 +235,9 @@ cc-skills update
 cc-skills status
 ```
 
-### Backup Strategy
+The CLI automatically backs up before destructive operations.
 
-The CLI automatically backs up before destructive operations:
-
-```bash
-# Manual backup
-cc-skills backup
-
-# Automatic backups during:
-- install (if existing directory found)
-- uninstall
-- restore
-```
-
-### Multi-Machine Sync
-
-Keep skills in sync across machines:
-
-**Via Bootstrap (Recommended)**:
-```bash
-# All machines: One-command install
-bash <(curl -fsSL https://raw.githubusercontent.com/indrasvat/claude-code-skills/main/bootstrap.sh)
-
-# Then update anytime with:
-cc-skills update
-```
-
-**Manual Sync**:
-```bash
-# Machine 1: Make changes
-cd ~/.config/claude-code-skills
-git add skills/new-skill
-git commit -m "feat: add new-skill"
-git push
-
-# Machine 2: Update
-cd ~/.config/claude-code-skills
-git pull
-cc-skills install
-```
+</details>
 
 ## Documentation
 

@@ -44,15 +44,36 @@ Local AI code reviews via CodeRabbit CLI. Use sparingly—rate-limited to 1 revi
 - Background execution with monitoring
 - Prioritized findings (critical > major > minor)
 
-## 🚀 Quick Start
+## Installation
 
-### One-Command Installation (Recommended)
+### Via Claude Code Plugin (Recommended)
 
-Install skills with a single command:
+In Claude Code, run:
+
+```
+/plugin install https://github.com/indrasvat/claude-code-skills
+```
+
+This installs all skills as a plugin. Skills are automatically available based on context.
+
+### For Development
+
+Test the plugin locally without installing:
+
+```bash
+claude --plugin-dir /path/to/claude-code-skills
+```
+
+### Via Bootstrap Script (Alternative)
+
+For traditional symlink-based installation to `~/.claude/skills/`:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/indrasvat/claude-code-skills/main/bootstrap.sh)
 ```
+
+<details>
+<summary>Bootstrap options and details</summary>
 
 This will:
 - Clone the repository to `~/.config/claude-code-skills`
@@ -71,49 +92,48 @@ BRANCH=develop bash <(curl -fsSL https://raw.githubusercontent.com/indrasvat/cla
 
 # Install from your fork
 REPO_URL=https://github.com/yourname/your-fork.git bash <(curl -fsSL https://raw.githubusercontent.com/indrasvat/claude-code-skills/main/bootstrap.sh)
-
-# Combine options
-INSTALL_DIR=~/my-skills BRANCH=develop bash <(curl -fsSL https://raw.githubusercontent.com/indrasvat/claude-code-skills/main/bootstrap.sh)
 ```
 
-**Private repositories:** The bootstrap script automatically detects if you have SSH keys configured and uses SSH for authentication. Otherwise, it falls back to HTTPS (which will prompt for credentials).
+**Private repositories:** The bootstrap script automatically detects if you have SSH keys configured and uses SSH for authentication.
 
 **Security note:** Review the bootstrap script before running:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/indrasvat/claude-code-skills/main/bootstrap.sh | less
 ```
 
-### Manual Installation (Alternative)
-
-If you prefer to clone the repository yourself:
-
-```bash
-git clone https://github.com/indrasvat/claude-code-skills.git
-cd claude-code-skills
-./bin/cc-skills install
-```
+</details>
 
 ### Updating
 
-After installation via bootstrap:
+**Plugin users:** Plugins update automatically when you reinstall or update Claude Code plugins.
 
+**Bootstrap users:**
 ```bash
 cc-skills update  # Pulls latest changes and reinstalls
 ```
 
-Or manually:
+## 📋 How It Works
 
-```bash
-cd ~/.config/claude-code-skills  # or wherever you installed
-git pull
-./bin/cc-skills install
-```
+### Plugin Installation (Recommended)
 
-The CLI tool handles everything automatically - backups, symlinks, and verification.
+When installed as a plugin via `/plugin install`, Claude Code:
+1. Clones the repository to its plugin directory
+2. Automatically discovers all skills in the `skills/` folder
+3. Makes skills available based on context (model-invoked)
 
-## 🛠️ CLI Tool: `cc-skills`
+Skills are loaded on-demand when relevant to your request.
 
-A bulletproof, forgiving CLI to manage your skills installation.
+### Discovery by Claude Code
+
+Claude Code discovers skills from multiple sources:
+1. **Plugin skills**: Installed via `/plugin install` (recommended)
+2. **Personal skills**: `~/.claude/skills/`
+3. **Project skills**: `.claude/skills/`
+
+<details>
+<summary>CLI Tool: cc-skills (for bootstrap users)</summary>
+
+A CLI to manage symlink-based installation.
 
 ### Commands
 
@@ -130,70 +150,45 @@ cc-skills help         # Show help message
 
 ### Features
 
-- ✅ **Automatic backups** before any destructive operation
-- ✅ **Graceful handling** of symlinks, directories, and conflicts
-- ✅ **Clear status reporting** with colored output
-- ✅ **Safe by default** - never deletes without confirmation
-- ✅ **Works anywhere** - just point to the repo
+- Automatic backups before destructive operations
+- Graceful handling of symlinks and conflicts
+- Clear status reporting with colored output
 
-### Adding to PATH (Optional)
-
-For convenience, add the `bin/` directory to your PATH:
+### Adding to PATH
 
 ```bash
 # Add to ~/.zshrc or ~/.bashrc
 export PATH="${PATH}:/path/to/claude-code-skills/bin"
 ```
 
-Then you can run `cc-skills` from anywhere.
-
-## 📋 How It Works
-
-### Symlink-Based Installation
-
-Skills are installed as symlinks from `~/.claude/skills/` to the repository:
-
-```
-~/.claude/skills/iterm2-driver -> /path/to/claude-code-skills/skills/iterm2-driver
-```
-
-**Benefits:**
-- ✅ Skills auto-update with `git pull`
-- ✅ Version controlled
-- ✅ Single source of truth
-- ✅ Easy to manage across machines
-
-### Discovery by Claude Code
-
-Claude Code automatically discovers skills from:
-1. **Personal skills**: `~/.claude/skills/`
-2. **Project skills**: `.claude/skills/`
-3. **Plugin skills**: Bundled with installed plugins
-
-Skills are loaded on-demand when relevant to the user's request.
+</details>
 
 ## 📦 Repository Structure
 
 ```
 claude-code-skills/
-├── README.md                    # This file
+├── .claude-plugin/
+│   └── plugin.json             # Plugin manifest (required)
+├── skills/                      # All skills (at plugin root)
+│   ├── iterm2-driver/
+│   │   ├── SKILL.md            # Main skill file
+│   │   └── examples/           # Runnable examples
+│   ├── cf-edge/
+│   │   └── SKILL.md
+│   └── coderabbit/
+│       └── SKILL.md
+├── README.md
 ├── LICENSE                      # MIT License
 ├── bin/
-│   └── cc-skills               # CLI management tool
-├── skills/                      # All skills
-│   └── iterm2-driver/
-│       ├── SKILL.md            # Main skill file
-│       └── examples/           # Runnable examples
-│           ├── 01-basic-tab.py
-│           ├── 02-dev-layout.py
-│           └── ...
+│   └── cc-skills               # CLI tool (for bootstrap users)
+├── bootstrap.sh                 # One-line installer (alternative)
 ├── docs/                        # Documentation
-│   ├── skill-authoring.md      # How to create skills
-│   ├── best-practices.md       # Conventions
-│   └── troubleshooting.md      # Common issues
+│   ├── skill-authoring.md
+│   ├── best-practices.md
+│   └── troubleshooting.md
 └── .github/
     └── workflows/
-        └── validate.yml         # CI validation
+        └── lint.yml             # CI validation
 ```
 
 ## 🎓 Using Skills
@@ -244,12 +239,10 @@ See [docs/skill-authoring.md](docs/skill-authoring.md) for a comprehensive guide
    # Skill content here...
    ```
 
-3. **Install the skill**:
+3. **Test in Claude Code**:
    ```bash
-   ./bin/cc-skills install
+   claude --plugin-dir /path/to/claude-code-skills
    ```
-
-4. **Test in Claude Code**
 
 ### Best Practices
 
@@ -263,6 +256,22 @@ See [docs/skill-authoring.md](docs/skill-authoring.md) for a comprehensive guide
 
 ### Skills Not Showing Up
 
+1. **Check plugin is installed**: Run `/plugin list` in Claude Code
+2. **Restart Claude Code** after installing
+
+### Plugin Issues
+
+Try reinstalling the plugin:
+```
+/plugin uninstall indrasvat-skills
+/plugin install https://github.com/indrasvat/claude-code-skills
+```
+
+<details>
+<summary>Bootstrap installation troubleshooting</summary>
+
+### Skills Not Showing Up (Bootstrap)
+
 1. **Check installation**:
    ```bash
    cc-skills status
@@ -273,80 +282,34 @@ See [docs/skill-authoring.md](docs/skill-authoring.md) for a comprehensive guide
    ls -la ~/.claude/skills/
    ```
 
-3. **Restart Claude Code**
-
 ### Symlink Issues
 
-If you see warnings about existing directories:
-
 ```bash
-# Backup current installation
 cc-skills backup
-
-# Remove old installation
 rm -rf ~/.claude/skills/iterm2-driver
-
-# Reinstall
 cc-skills install
 ```
 
 ### Permission Errors
 
 ```bash
-# Ensure script is executable
 chmod +x bin/cc-skills
-
-# Ensure you have write access
 ls -la ~/.claude/skills/
 ```
+
+</details>
 
 See [docs/troubleshooting.md](docs/troubleshooting.md) for more solutions.
 
 ## 🌍 Multi-Machine Setup
 
-### All Machines
+Install the plugin on each machine:
 
-Same one-command installation everywhere:
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/indrasvat/claude-code-skills/main/bootstrap.sh)
+```
+/plugin install https://github.com/indrasvat/claude-code-skills
 ```
 
-Skills stay in sync across machines:
-- All machines pull from same repository
-- `cc-skills update` keeps everyone current
-- Consistent `~/.config/claude-code-skills` location
-
-### Manual Sync Alternative
-
-If you prefer manual control:
-
-```bash
-# Machine 1: Make changes
-cd ~/.config/claude-code-skills
-git add skills/new-skill
-git commit -m "feat: add new skill"
-git push
-
-# Machine 2: Update
-cd ~/.config/claude-code-skills
-git pull
-cc-skills install
-```
-
-## 🔄 Update Workflow
-
-```bash
-cd claude-code-skills
-git pull                  # Get latest changes
-cc-skills update          # Reinstall (automatic backup)
-```
-
-Or use the shorthand:
-
-```bash
-cc-skills update          # Does both git pull + reinstall
-```
+Skills stay in sync across machines through the plugin system.
 
 ## 🤝 Contributing
 

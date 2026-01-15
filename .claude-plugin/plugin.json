@@ -1,0 +1,10 @@
+{
+  "name": "indrasvat-skills",
+  "description": "Claude Code skills for iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
+  "version": "1.0.0",
+  "author": {
+    "name": "indrasvat"
+  },
+  "repository": "https://github.com/indrasvat/claude-code-skills",
+  "license": "MIT"
+}

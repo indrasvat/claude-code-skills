@@ -36,7 +36,9 @@
 
 ---
 
-## 3. Success Metrics (SMART)
+## 3. Success Metrics & Kill Criteria
+
+### Success Metrics (SMART)
 
 How we'll know this project succeeded:
 
@@ -44,15 +46,31 @@ How we'll know this project succeeded:
 - [ ] **{Metric 2}**: {Specific, Measurable target} by {timeframe}
 - [ ] **{Metric 3}**: {Specific, Measurable target} by {timeframe}
 
+### Kill Criteria
+
+When to roll back or pivot (be honest upfront):
+
+- If {metric X} is not met by {date}, we will {action}
+- If {condition}, we stop and reassess
+
 ---
 
-## 4. User Stories
+## 4. User Stories / Jobs to Be Done
 
 ### Primary Persona: {PERSONA_NAME}
 
 > {Brief description: role, technical level, key characteristics}
 
-#### Core User Stories
+### Jobs to Be Done (JTBD)
+
+*Frame requirements around what job users are "hiring" this product to do:*
+
+> **When** {situation/trigger}, **I want to** {motivation/goal}, **so I can** {expected outcome}.
+
+- **Job 1**: When {situation}, I want to {action}, so I can {outcome}
+- **Job 2**: When {situation}, I want to {action}, so I can {outcome}
+
+### Core User Stories
 
 - [ ] **US-001**: As a {user type}, I want {goal} so that {benefit}
   - **Acceptance Criteria**:
@@ -153,42 +171,45 @@ POST /api/users
 
 ## 7. Implementation Phases
 
-### Phase 1: {PHASE_NAME} (Foundation)
+*Each task should be completable in 1-4 hours (roughly one PR/commit). If a task is bigger, break it down.*
 
-**Goal**: {What this phase achieves}
+### Phase 1: Walking Skeleton (Foundation)
 
-- [ ] **Task 1.1**: {Specific, actionable task description}
-- [ ] **Task 1.2**: {Specific, actionable task description}
-- [ ] **Task 1.3**: {Specific, actionable task description}
-- [ ] **Task 1.4**: {Specific, actionable task description}
+**Goal**: Basic end-to-end flow working, even if ugly. Proves the architecture.
 
-**Phase 1 Verification**: {How to verify this phase is complete}
+- [ ] **Task 1.1**: {Setup - e.g., "Initialize repo with boilerplate and CI/CD"}
+- [ ] **Task 1.2**: {Infrastructure - e.g., "Set up database and basic schema"}
+- [ ] **Task 1.3**: {Deployment - e.g., "Deploy 'Hello World' to staging"}
+- [ ] **Task 1.4**: {Integration - e.g., "Connect frontend to backend with one real endpoint"}
 
----
-
-### Phase 2: {PHASE_NAME} (Core Features)
-
-**Goal**: {What this phase achieves}
-
-- [ ] **Task 2.1**: {Specific, actionable task description}
-- [ ] **Task 2.2**: {Specific, actionable task description}
-- [ ] **Task 2.3**: {Specific, actionable task description}
-- [ ] **Task 2.4**: {Specific, actionable task description}
-- [ ] **Task 2.5**: {Specific, actionable task description}
-
-**Phase 2 Verification**: {How to verify this phase is complete}
+**Phase 1 Verification**: {e.g., "App deploys to staging, one user flow works end-to-end"}
 
 ---
 
-### Phase 3: {PHASE_NAME} (Polish & Launch)
+### Phase 2: Core MVP (Primary Value)
 
-**Goal**: {What this phase achieves}
+**Goal**: The main user value delivered. Users can actually use it.
 
-- [ ] **Task 3.1**: {Specific, actionable task description}
-- [ ] **Task 3.2**: {Specific, actionable task description}
-- [ ] **Task 3.3**: {Specific, actionable task description}
+- [ ] **Task 2.1**: {Core feature 1 - e.g., "Implement user authentication"}
+- [ ] **Task 2.2**: {Core feature 2 - e.g., "Build main dashboard view"}
+- [ ] **Task 2.3**: {Core feature 3 - e.g., "Add data creation/editing flow"}
+- [ ] **Task 2.4**: {Core feature 4 - e.g., "Implement basic error handling"}
+- [ ] **Task 2.5**: {Integration - e.g., "Connect all features into coherent flow"}
 
-**Phase 3 Verification**: {How to verify this phase is complete}
+**Phase 2 Verification**: {e.g., "User can complete primary job-to-be-done end-to-end"}
+
+---
+
+### Phase 3: Polish & Harden (Production Ready)
+
+**Goal**: Production-quality release. Handle edge cases, improve UX.
+
+- [ ] **Task 3.1**: {UX polish - e.g., "Add loading states and error messages"}
+- [ ] **Task 3.2**: {Edge cases - e.g., "Handle offline/network failure gracefully"}
+- [ ] **Task 3.3**: {Documentation - e.g., "Write user-facing docs and API reference"}
+- [ ] **Task 3.4**: {Monitoring - e.g., "Add logging, metrics, and alerting"}
+
+**Phase 3 Verification**: {e.g., "All acceptance criteria met, tests pass, docs complete"}
 
 ---
 
@@ -246,7 +267,9 @@ POST /api/users
 
 ---
 
-## 10. Risk Assessment
+## 10. Risk Assessment & Pre-Mortem
+
+### Risk Matrix
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
@@ -254,16 +277,48 @@ POST /api/users
 | {Risk 2} | High/Med/Low | High/Med/Low | {Mitigation strategy} |
 | {Risk 3} | High/Med/Low | High/Med/Low | {Mitigation strategy} |
 
+### Pre-Mortem: Why This Project Failed
+
+*Write this section as if the project already failed. What went wrong?*
+
+> It's 6 months from now and this project was a failure. Here's what happened:
+
+- {Reason 1 - e.g., "We underestimated the complexity of X"}
+- {Reason 2 - e.g., "Users didn't actually want Y, they wanted Z"}
+- {Reason 3 - e.g., "We couldn't get buy-in from stakeholder A"}
+
+*Use these to inform mitigation strategies above.*
+
 ---
 
-## 11. Dependencies
+## 11. Open Questions & Assumptions
+
+### Open Questions
+
+*Unknowns to be resolved during development (it's okay not to have all answers):*
+
+- [ ] {Question 1 - e.g., "How will we handle edge case X?"}
+- [ ] {Question 2 - e.g., "What's the expected data volume?"}
+- [ ] {Question 3 - e.g., "Do we need admin approval workflow?"}
+
+### Assumptions
+
+*What we're assuming to be true (document so we can revisit):*
+
+- {Assumption 1 - e.g., "Users have GitHub accounts"}
+- {Assumption 2 - e.g., "API rate limits won't be hit at expected scale"}
+- {Assumption 3 - e.g., "Existing auth system can be extended"}
+
+---
+
+## 12. Dependencies
 
 ### External Dependencies
 
 - {External service/API 1}: {What we need from it}
 - {External service/API 2}: {What we need from it}
 
-### Internal Dependencies
+### Task Dependencies
 
 ```mermaid
 graph TD

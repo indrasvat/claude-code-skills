@@ -139,6 +139,40 @@ If the user has only a vague idea, switch to brainstorming mode:
 
 4. **Validate direction**: "So the core idea is [summary]. Before we go deeper, does that capture it?"
 
+### Advanced Discovery Techniques
+
+**Five Whys** - When the problem is unclear, keep asking "why" to find the root:
+```
+User: "I need a dashboard"
+→ Why? "To see metrics"
+→ Why do you need to see metrics? "To know if campaigns are working"
+→ Why do you need to know that? "To stop wasting money on bad campaigns"
+→ ROOT: The real need is campaign ROI visibility, not "a dashboard"
+```
+
+**Ask About Past Behavior** - People remember the past better than they predict the future:
+- Instead of: "Would you use a feature that does X?"
+- Ask: "Tell me about the last time you tried to do X. What happened? Where did you get stuck?"
+
+**Jobs to Be Done (JTBD)** - Frame requirements around the "job" users hire the product to do:
+- Template: "When [situation], I want to [motivation], so I can [outcome]"
+- Example: "When I'm reviewing PRs late at night, I want to quickly see what changed, so I can approve without missing bugs"
+
+**Opportunity Solution Tree** - Connect outcomes to opportunities to solutions:
+```
+Outcome: Increase user retention
+  └── Opportunity: Users forget to return
+        └── Solution A: Email reminders
+        └── Solution B: Mobile push notifications
+  └── Opportunity: Users don't see value quickly
+        └── Solution A: Improved onboarding
+        └── Solution B: Quick wins in first session
+```
+
+**Pre-Mortem Technique** (Shreyas Doshi) - Before building, imagine it failed:
+- "It's 6 months from now and this project was a disaster. What went wrong?"
+- Forces realistic risk assessment upfront
+
 ### Encouraging Responses
 
 Use encouraging language throughout:

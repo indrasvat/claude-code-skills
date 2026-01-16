@@ -1,7 +1,9 @@
 {
   "name": "indrasvat-skills",
-  "description": "Claude Code skills for iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
-  "version": "1.0.0",
+  "description": "Claude Code skills for PRD generation with True Ralph Loop, iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
+  "version": "1.1.0",
+  "commands": "./commands/",
+  "skills": "./skills/",
   "author": {
     "name": "indrasvat"
   },

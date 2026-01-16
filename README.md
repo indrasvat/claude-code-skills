@@ -72,10 +72,13 @@ Local AI code reviews via CodeRabbit CLI. Use sparingly—rate-limited to 1 revi
 In Claude Code, run:
 
 ```
-/plugin install https://github.com/indrasvat/claude-code-skills
+/plugin marketplace add indrasvat/claude-code-skills
+/plugin install indrasvat-skills@indrasvat-skills
 ```
 
-This installs all skills as a plugin. Skills are automatically available based on context.
+The first command adds the repository as a plugin marketplace. The second installs the plugin (or use just `/plugin install` to open the interactive installer).
+
+Skills are automatically available based on context once installed.
 
 ### For Development
 

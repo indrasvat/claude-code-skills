@@ -4,12 +4,12 @@
     "name": "indrasvat",
     "url": "https://github.com/indrasvat"
   },
-  "description": "Claude Code skills for iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
+  "description": "Claude Code skills for PRD generation with True Ralph Loop, iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
   "plugins": [
     {
       "name": "indrasvat-skills",
       "source": "./",
-      "description": "Claude Code skills for iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
+      "description": "Claude Code skills for PRD generation with True Ralph Loop, iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
       "category": "productivity"
     }
   ]

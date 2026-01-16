@@ -8,6 +8,27 @@ This repository contains production-ready skills for [Claude Code](https://claud
 
 ### Current Skills
 
+#### 📋 **prd-generator**
+Generate comprehensive Product Requirements Documents with interactive discovery, progress tracking, and True Ralph Loop support for autonomous implementation.
+
+**Capabilities:**
+- Interactive discovery with 12+ adaptive questions
+- Generates `docs/PRD.md` with checkboxes and phased tasks
+- Creates `docs/PROGRESS.md` for context recovery across sessions
+- **True Ralph Loop**: Fresh Claude sessions for each iteration (no context rot)
+- Supports both external script and tmux modes for autonomous implementation
+- Smart context recovery after crashes or compaction
+
+**Key Insight:** Unlike Anthropic's Ralph plugin (same-session Stop hook), True Ralph spawns fresh Claude sessions, preventing context pollution.
+
+**Slash Commands:**
+- `/prd` - Generate a new PRD with interactive discovery
+- `/prd-status` - Check implementation progress
+- `/prd-ralph` - Start True Ralph Loop (autonomous implementation)
+- `/prd-resume` - Recover context after crash/new session
+
+[View Templates →](skills/prd-generator/templates/)
+
 #### 🖥️ **iterm2-driver**
 Drive iTerm2 programmatically using Python scripts to automate terminal tasks, run tests, or manage sessions.
 
@@ -169,7 +190,16 @@ export PATH="${PATH}:/path/to/claude-code-skills/bin"
 claude-code-skills/
 ├── .claude-plugin/
 │   └── plugin.json             # Plugin manifest (required)
-├── skills/                      # All skills (at plugin root)
+├── commands/                    # Slash commands (user-invocable)
+│   ├── prd.md                  # /prd - Generate PRD
+│   ├── prd-status.md           # /prd-status - Check progress
+│   ├── prd-ralph.md            # /prd-ralph - Start True Ralph Loop
+│   └── prd-resume.md           # /prd-resume - Recover context
+├── skills/                      # All skills (model-invoked)
+│   ├── prd-generator/
+│   │   ├── SKILL.md            # Main skill file
+│   │   ├── scripts/            # True Ralph Loop script
+│   │   └── templates/          # PRD and PROGRESS templates
 │   ├── iterm2-driver/
 │   │   ├── SKILL.md            # Main skill file
 │   │   └── examples/           # Runnable examples

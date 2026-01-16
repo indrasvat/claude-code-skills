@@ -16,68 +16,138 @@ Generate production-quality PRDs through interactive discovery, then implement a
 
 ## Phase 1: Discovery (Interactive Q&A)
 
-Before generating a PRD, gather comprehensive requirements through adaptive questioning.
+Before generating a PRD, gather comprehensive requirements through adaptive, **collaborative** questioning.
+
+### Discovery Philosophy
+
+**Be a thought partner, not an interrogator.**
+
+Many users start with only a vague idea. Your job is to:
+- Help them clarify and refine their thinking
+- Offer concrete suggestions when they're unsure
+- Validate rough ideas and help shape them
+- Make "I don't know" a safe answer that leads somewhere useful
+
+### Handling Uncertainty
+
+When a user says "I don't know" or seems unsure:
+
+1. **Offer 2-3 concrete options** to choose from
+2. **Suggest what's typical** for similar projects
+3. **Propose a sensible default** they can accept or modify
+4. **Break big questions into smaller ones**
+
+**Examples:**
+
+User: "I'm not sure what tech stack to use"
+→ "Based on [what you've described], here are three approaches that would work well:
+   1. **React + Node.js** - Great for interactive UIs, huge ecosystem
+   2. **Next.js** - Good if you need SEO, built-in API routes
+   3. **SvelteKit** - Lighter weight, excellent performance
+   What feels right, or should I explain the tradeoffs?"
+
+User: "I don't know about scale requirements"
+→ "Let's work backwards: Is this for personal use, a small team (<50 users), a growing startup (hundreds), or enterprise scale (thousands+)? For most new projects, starting with 'handles 100 concurrent users smoothly' is a reasonable baseline we can adjust."
+
+User: "I have no idea what success looks like"
+→ "That's normal at this stage! Let me suggest some metrics based on similar projects:
+   - For a tool: 'Users complete [core task] in under 2 minutes'
+   - For an app: 'Daily active users grows 10% week over week'
+   - For an API: '99.9% uptime, <200ms p95 latency'
+   Which of these resonates, or what matters most to you?"
 
 ### Question Flow
 
-Ask questions ONE AT A TIME. Adapt based on answers. Minimum 8 questions before PRD generation.
+Ask questions ONE AT A TIME. Adapt based on answers. Be ready to suggest and guide.
 
-**Problem Space (Start Here)**
+**Problem Space (Start Here - Be Exploratory)**
 
-1. **What problem are you solving?**
-   - Ask about pain points, current workarounds, why existing solutions don't work
-   - Follow-up: "Who experiences this problem most acutely?"
+1. **Tell me about what you're trying to build**
+   - Start open-ended: "What's the idea?" or "What sparked this?"
+   - If vague: "Paint me a picture - what does a user do with this?"
+   - If stuck: Offer examples: "Is it more like [A], [B], or something different?"
+   - Follow-up: "What's frustrating about how people handle this today?"
 
-2. **Who is the target user?**
-   - Technical level, frequency of use, environment (mobile/desktop/CLI)
-   - Follow-up: "What's their current workflow without this solution?"
+2. **Who will use this?**
+   - If unsure: "Let's imagine your first 10 users - who are they?"
+   - Offer personas: "Is this for developers, business users, consumers, or internal teams?"
+   - Follow-up: "How technical are they? What tools do they already use?"
 
-3. **What does success look like?**
-   - Measurable outcomes, KPIs, "how will you know this worked?"
-   - Follow-up: "What would make users choose this over alternatives?"
+3. **How will you know this is working?**
+   - If stuck: "If we check in 3 months from now, what would make you say 'this was worth it'?"
+   - Offer metrics: "Would success be measured by time saved, revenue, user growth, or something else?"
+   - Follow-up: "What's the minimum outcome that would make this a win?"
 
-**Technical Context (Adapt Based on Problem)**
+**Technical Context (Offer Guidance)**
 
-4. **What's the tech stack?**
-   - Languages, frameworks, databases, deployment target
-   - If existing codebase: "Can you point me to the repo or key files?"
+4. **What's the tech landscape?**
+   - If undecided: "I can suggest a stack based on your constraints. Any languages/frameworks you prefer or want to avoid?"
+   - If existing code: "Point me to the repo or key files and I'll understand the patterns"
+   - Proactively suggest: "Given [requirements], I'd recommend [X] because [reason]. Thoughts?"
 
-5. **Any existing codebase to integrate with?**
-   - If yes: Explore architecture, patterns, conventions
-   - Ask Claude to read key files to understand context
+5. **Existing code or greenfield?**
+   - If existing: Explore architecture, patterns, conventions
+   - If greenfield: "Great! We have flexibility. Any architectural patterns you like?"
+   - Read key files to understand context before asking more questions
 
-6. **Scale and performance requirements?**
-   - Expected users, requests/sec, data volume
-   - "Any hard latency or uptime requirements?"
+6. **Scale and performance?**
+   - If unsure: "Let's estimate: how many users in month 1? Month 6? Year 1?"
+   - Offer baselines: "For most new projects, designing for 1000 daily users is a safe start"
+   - "Any hard requirements like 'must work offline' or 'real-time updates'?"
 
-**Scope & Constraints**
+**Scope & Constraints (Help Define Boundaries)**
 
-7. **What's explicitly OUT of scope?**
-   - MVP boundaries, "what are we NOT building?"
-   - Future phases vs current scope
+7. **What should we explicitly NOT build?**
+   - If stuck: "What features would be 'nice to have later' vs 'must have now'?"
+   - Suggest: "For a solid MVP, I'd suggest cutting [X] and [Y] for phase 2. Sound right?"
+   - "What would be gold-plating vs essential?"
 
 8. **Non-functional requirements?**
-   - Security (auth, encryption, compliance)
-   - Accessibility, i18n, offline support
-   - "Any regulatory requirements?"
+   - Offer checklist: "Let me run through some common ones:
+     - Auth needed? (none / basic / OAuth / SSO)
+     - Accessibility level? (basic / WCAG AA / AAA)
+     - Compliance? (GDPR, HIPAA, SOC2, none)"
+   - Suggest defaults: "For most projects, I'd recommend [X]. Any reason to go stricter?"
 
 9. **External dependencies?**
-   - APIs, auth providers, third-party services
-   - "Any rate limits or costs to consider?"
+   - Proactively identify: "Based on what you've described, you'll likely need [payment API / auth provider / etc]. Any preferences?"
+   - "Any services you're already paying for that we should leverage?"
 
-**Verification**
+**Verification (Guide Toward Testability)**
 
-10. **How will we test this?**
-    - Unit, integration, e2e strategies
-    - "Any specific test frameworks in use?"
+10. **Testing strategy?**
+    - If unsure: "I'll include a testing approach. Any existing test setup, or should I recommend one?"
+    - Suggest: "For this type of project, I'd recommend [unit tests for core logic, integration tests for API, e2e for critical flows]"
 
 11. **What does 'done' look like?**
-    - Acceptance criteria for launch
-    - "What would block a release?"
+    - If stuck: "Let's define the launch checklist together. What MUST work on day 1?"
+    - Offer: "Typical launch criteria: [feature complete, tests pass, docs exist, deployed to prod]. Add or remove?"
 
-12. **Known edge cases or error scenarios?**
-    - Failure modes, error handling expectations
-    - "What happens when X fails?"
+12. **Edge cases and failure modes?**
+    - Prompt thinking: "What's the worst thing that could happen? Data loss? Security breach? Downtime?"
+    - Suggest: "Common edge cases for this type of project: [network failures, invalid input, concurrent edits]. I'll include handling for these."
+
+### Brainstorming Mode
+
+If the user has only a vague idea, switch to brainstorming mode:
+
+1. **Explore the problem space**: "Let's forget solutions for a moment. Tell me about the frustration or opportunity you've noticed."
+
+2. **Generate options**: "Based on that, here are 3 different products you could build: [A], [B], [C]. Which excites you most?"
+
+3. **Refine iteratively**: "Interesting! Let's explore [choice]. What if it also did [X]? Or would that be too much?"
+
+4. **Validate direction**: "So the core idea is [summary]. Before we go deeper, does that capture it?"
+
+### Encouraging Responses
+
+Use encouraging language throughout:
+
+- "That's a great starting point - let's build on it"
+- "Good instinct. Here's how we might refine that..."
+- "That's actually a common challenge. Here's what usually works..."
+- "Perfect, that tells me a lot. Now I'm curious about..."
+- "Not sure? No problem - let me offer some options..."
 
 ### Completeness Check
 

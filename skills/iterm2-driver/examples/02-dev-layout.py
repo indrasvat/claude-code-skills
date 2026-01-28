@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.14"
 # dependencies = [
 #   "iterm2",
 #   "pyobjc",
@@ -18,7 +18,6 @@ Usage:
 """
 
 import iterm2
-import asyncio
 
 async def main(connection):
     app = await iterm2.async_get_app(connection)

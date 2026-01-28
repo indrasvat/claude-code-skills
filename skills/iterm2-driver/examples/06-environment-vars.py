@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.14"
 # dependencies = [
 #   "iterm2",
 #   "pyobjc",
@@ -23,7 +23,6 @@ Usage:
 """
 
 import iterm2
-import asyncio
 import os
 import shlex
 

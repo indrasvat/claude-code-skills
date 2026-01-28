@@ -184,8 +184,9 @@ def capture_screenshot(name: str) -> str:
 
 async def verify_screen_contains(session, expected: str, description: str) -> bool:
     """Verify that expected text appears on screen within timeout."""
-    start = asyncio.get_event_loop().time()
-    while (asyncio.get_event_loop().time() - start) < TIMEOUT_SECONDS:
+    import time
+    start = time.monotonic()
+    while (time.monotonic() - start) < TIMEOUT_SECONDS:
         screen = await session.async_get_screen_contents()
         for i in range(screen.number_of_lines):
             if expected in screen.line(i).string:

@@ -12,7 +12,6 @@ Example 3: Advanced - Interactive REPL Driver
 This script drives an interactive process (Python REPL). It sends code, waits for
 execution, and verifies the output by reading the screen content programmatically.
 This pattern is essential for testing TUIs or interactive CLIs.
-Corresponds to Example 3 in SKILL.md.
 
 Tests:
     1. REPL Start: Verify Python REPL launches and shows prompt
@@ -80,8 +79,9 @@ def print_summary() -> int:
 
 async def verify_screen_contains(session, expected: str, timeout: float = 5.0) -> bool:
     """Check if expected text appears on screen within timeout."""
-    start = asyncio.get_event_loop().time()
-    while (asyncio.get_event_loop().time() - start) < timeout:
+    import time
+    start = time.monotonic()
+    while (time.monotonic() - start) < timeout:
         screen = await session.async_get_screen_contents()
         for i in range(screen.number_of_lines):
             if expected in screen.line(i).string:
@@ -189,8 +189,8 @@ async def main(connection):
             await session.async_send_text("exit()\n")
             await asyncio.sleep(0.2)
             await session.async_close()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  Cleanup warning: {e}")
 
     return print_summary()
 

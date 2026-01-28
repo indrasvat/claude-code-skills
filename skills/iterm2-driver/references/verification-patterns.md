@@ -20,8 +20,8 @@ This reference provides patterns for verifying Terminal User Interface (TUI) beh
 ```python
 async def verify_text_present(session, text: str, timeout: float = 5.0) -> bool:
     """Check if text appears anywhere on screen."""
-    start = asyncio.get_event_loop().time()
-    while (asyncio.get_event_loop().time() - start) < timeout:
+    start = time.monotonic()
+    while (time.monotonic() - start) < timeout:
         screen = await session.async_get_screen_contents()
         for i in range(screen.number_of_lines):
             if text in screen.line(i).string:
@@ -96,8 +96,8 @@ async def verify_column_headers(session, headers: list[str], line_num: int = 0) 
 ```python
 async def wait_for_state(session, marker: str, timeout: float = 5.0) -> bool:
     """Wait until a specific marker appears, indicating state change."""
-    start = asyncio.get_event_loop().time()
-    while (asyncio.get_event_loop().time() - start) < timeout:
+    start = time.monotonic()
+    while (time.monotonic() - start) < timeout:
         screen = await session.async_get_screen_contents()
         full_text = "\n".join(
             screen.line(i).string
@@ -114,8 +114,8 @@ async def wait_for_state(session, marker: str, timeout: float = 5.0) -> bool:
 ```python
 async def wait_until_gone(session, marker: str, timeout: float = 5.0) -> bool:
     """Wait until a specific marker disappears from screen."""
-    start = asyncio.get_event_loop().time()
-    while (asyncio.get_event_loop().time() - start) < timeout:
+    start = time.monotonic()
+    while (time.monotonic() - start) < timeout:
         screen = await session.async_get_screen_contents()
         full_text = "\n".join(
             screen.line(i).string

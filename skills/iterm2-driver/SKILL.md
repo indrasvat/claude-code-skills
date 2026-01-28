@@ -27,37 +27,7 @@ For screenshots, add `"pyobjc-framework-Quartz"` to dependencies.
 
 ## CRITICAL: Docstring Planning
 
-Every script MUST begin with a comprehensive docstring:
-
-```python
-"""
-<Script Name>: <Brief description>
-
-Tests:
-    1. <Test name>: <What is being tested>
-
-Verification Strategy:
-    - What screen content to look for
-    - What timing/polling strategy
-    - What constitutes pass vs fail
-
-Screenshots:
-    - <name.png>: <What it captures>
-
-Screenshot Inspection Checklist:
-    - Colors: <Status indicators, highlights>
-    - Boundaries: <Headers, footers, borders>
-    - Buttons/Controls: <Interactive elements>
-    - Visible Elements: <Text, icons, indicators>
-
-Key Bindings:
-    - q: Quit
-    - ?: Help
-
-Usage:
-    uv run <script_name>.py
-"""
-```
+Every script MUST begin with a comprehensive docstring covering: Tests, Verification Strategy, Screenshots, Key Bindings, and Usage. See `examples/00-comprehensive-template.py` for the canonical format.
 
 ## Core Concepts
 
@@ -120,7 +90,7 @@ BOX_HORIZONTAL = '─═━'
 
 # Check corner connectivity
 for j, char in enumerate(line):
-    if char in '┌╭╔' and line[j+1] not in BOX_HORIZONTAL:
+    if char in '┌╭╔' and j + 1 < len(line) and line[j+1] not in BOX_HORIZONTAL:
         print(f"LAYOUT ERROR: Corner not connected at col {j}")
 ```
 
@@ -128,51 +98,11 @@ See `references/verification-patterns.md` for complete layout verification helpe
 
 ## Screenshot Capture (Quartz)
 
-For window-only screenshots (not full screen):
-
-```python
-import Quartz
-import subprocess
-
-def get_iterm2_window_id():
-    windows = Quartz.CGWindowListCopyWindowInfo(
-        Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)
-    for w in windows:
-        if 'iTerm' in w.get('kCGWindowOwnerName', ''):
-            return w.get('kCGWindowNumber')
-    return None
-
-def capture_screenshot(name, output_dir="./screenshots"):
-    window_id = get_iterm2_window_id()
-    filepath = f"{output_dir}/{name}.png"
-    if window_id:
-        subprocess.run(["screencapture", "-x", "-l", str(window_id), filepath])
-    else:
-        subprocess.run(["screencapture", "-x", filepath])
-    return filepath
-```
+Use `pyobjc-framework-Quartz` for window-targeted screenshots (not full screen). The pattern uses `CGWindowListCopyWindowInfo` to find the iTerm2 window ID, then `screencapture -l <id>`. See `examples/00-comprehensive-template.py` or `references/templates.md` for complete implementation.
 
 ## Test Reporting
 
-Track results with pass/fail counts:
-
-```python
-results = {"passed": 0, "failed": 0, "tests": []}
-
-def log_result(name, status, details=""):
-    results["tests"].append({"name": name, "status": status})
-    if status == "PASS":
-        results["passed"] += 1
-        print(f"[+] PASS: {name}")
-    else:
-        results["failed"] += 1
-        print(f"[x] FAIL: {name} - {details}")
-
-def print_summary():
-    total = results["passed"] + results["failed"]
-    print(f"\nSUMMARY: {results['passed']}/{total} passed")
-    return 1 if results["failed"] > 0 else 0
-```
+Track results with a `results` dict containing `passed`, `failed`, and `tests` list. Use `log_result(name, status, details)` for each test and `print_summary()` to show final counts and return exit code. See `references/reporting.md` for complete patterns including JSON/JUnit export.
 
 ## Special Keys Reference
 
@@ -212,6 +142,11 @@ Use descriptive names: `watch_build_logs.py`, `drive_k9s_debug.py`
 - `03-repl-driver.py` - REPL automation with verification
 - `04-nano-automation.py` - TUI editor with cleanup
 - `05-screen-monitor.py` - ScreenStreamer for real-time monitoring
+- `06-environment-vars.py` - Environment variable handling
+- `07-cleanup-sessions.py` - Session cleanup patterns
+- `08-badge-control.py` - Badge and tab control
+- `09-special-keys.py` - Special key sequences
+- `10-session-reuse.py` - Session reuse patterns
 - `11-layout-verification.py` - TUI layout alignment checks
 
 **References** (`references/` directory):

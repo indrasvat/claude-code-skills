@@ -12,7 +12,6 @@ Example 4: Advanced - TUI Automation (Nano Editor)
 This script demonstrates how to drive a full-screen terminal application (Nano).
 It launches the editor, types text, and handles the save-and-quit keystroke sequence
 (`Ctrl+X`, `y`, `Enter`).
-Corresponds to Example 4 in SKILL.md.
 
 Tests:
     1. Launch Nano: Verify Nano editor starts and shows interface

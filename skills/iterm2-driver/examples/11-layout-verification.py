@@ -126,6 +126,8 @@ try:
                 return window.get('kCGWindowNumber')
         return None
 except ImportError:
+    print("WARNING: Quartz not available, screenshots will capture full screen")
+
     def get_iterm2_window_id():
         return None
 

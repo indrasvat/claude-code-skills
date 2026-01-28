@@ -12,7 +12,6 @@ Example 5: Advanced - Screen Streaming (Real-Time Monitoring)
 This demonstrates how to use `ScreenStreamer` to "watch" the screen for updates.
 This is much more reliable than using `sleep()` because it reacts to actual screen paints.
 This is ideal for an agent to "see" what is happening in a TUI or long-running process.
-Corresponds to Example 5 in SKILL.md.
 
 Tests:
     1. Start Process: Launch ping command

@@ -251,6 +251,9 @@ async def verify_status_bar(session, position: str = "bottom") -> dict:
     issues = []
 
     # Find status bar line
+    status_line = None
+    status_line_num = -1
+
     if position == "bottom":
         for i in range(screen.number_of_lines - 1, -1, -1):
             line = screen.line(i).string
@@ -265,6 +268,15 @@ async def verify_status_bar(session, position: str = "bottom") -> dict:
                 status_line = line
                 status_line_num = i
                 break
+
+    # Handle empty screen
+    if status_line is None:
+        return {
+            'valid': False,
+            'issues': ["No status bar found - screen is empty or TUI not rendered"],
+            'line': -1,
+            'content_length': 0,
+        }
 
     # Check for large gaps (more than 10 consecutive spaces in middle)
     in_content = False

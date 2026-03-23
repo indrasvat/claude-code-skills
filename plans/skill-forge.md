@@ -1,4 +1,4 @@
-# astra-vidya — Forging a Portable Agent Skills Arsenal
+# skill-forge — 10 Portable Agent Skills for Dev & K8s Workflows
 
 ExecPlan for creating 10 agent skills in [indrasvat/claude-code-skills](https://github.com/indrasvat/claude-code-skills).
 

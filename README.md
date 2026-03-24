@@ -6,7 +6,29 @@ A collection of personal Claude Code skills for automating terminal tasks, drivi
 
 This repository contains production-ready skills for [Claude Code](https://claude.ai/code), designed to extend Claude's capabilities with specialized domain knowledge and automation patterns.
 
-### Current Skills
+### Skills (14 total)
+
+#### Universal Dev Workflow (5 new)
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| **ci-gate** | `/ci-gate` | Run all CI checks locally before pushing (Go, JS/TS, Rust, Python). `--fix` to auto-fix. |
+| **exec-plan** | `/exec-plan` | Create self-contained execution plans any agent can follow end-to-end. |
+| **ship-pr** | `/ship-pr` | Create PRs with a standards compliance review gate. Blocks on CLAUDE.md violations. |
+| **deslop** | `/deslop` | Clean AI-generated slop — dead comments, unused code, redundant logic. |
+| **triage-pr** | `/triage-pr` | Fetch, categorize, and address PR review comments by priority (BLOCKER > QUESTION > SUGGESTION > NITPICK). |
+
+#### Go / Kubernetes (5 new)
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| **k8s-diff** | `/k8s-diff` | Diff Helm/Kustomize/raw YAML against live cluster, flag risky changes. |
+| **migration-guard** | `/migration-guard` | Analyze DB migrations for lock risk, backward compat, rollback safety. |
+| **api-compat** | `/api-compat` | Detect breaking changes in protobuf, OpenAPI, GraphQL, or Go exported APIs. |
+| **rollout-check** | `/rollout-check` | Verify K8s deployment health — pods, events, HPA, logs. |
+| **crd-impact** | `/crd-impact` | Find all controllers, webhooks, RBAC, and manifests affected by a CRD change. |
+
+#### Original Skills (4)
 
 #### 📋 **prd-generator**
 Generate comprehensive Product Requirements Documents with interactive discovery, progress tracking, and True Ralph Loop support for autonomous implementation.
@@ -199,17 +221,29 @@ claude-code-skills/
 │   ├── prd-ralph.md            # /prd-ralph - Start True Ralph Loop
 │   └── prd-resume.md           # /prd-resume - Recover context
 ├── skills/                      # All skills (model-invoked)
-│   ├── prd-generator/
-│   │   ├── SKILL.md            # Main skill file
-│   │   ├── scripts/            # True Ralph Loop script
-│   │   └── templates/          # PRD and PROGRESS templates
-│   ├── iterm2-driver/
-│   │   ├── SKILL.md            # Main skill file
-│   │   └── examples/           # Runnable examples
-│   ├── cf-edge/
-│   │   └── SKILL.md
-│   └── coderabbit/
-│       └── SKILL.md
+│   ├── ci-gate/SKILL.md        # Local CI checks
+│   ├── exec-plan/              # Execution planning
+│   │   ├── SKILL.md
+│   │   └── references/template.md
+│   ├── ship-pr/                # PR creation with standards gate
+│   │   ├── SKILL.md
+│   │   └── references/templates.md
+│   ├── deslop/SKILL.md         # AI slop cleanup
+│   ├── triage-pr/SKILL.md      # PR review triage
+│   ├── k8s-diff/SKILL.md       # K8s manifest diffing
+│   ├── migration-guard/SKILL.md # DB migration safety
+│   ├── api-compat/SKILL.md     # API breaking change detection
+│   ├── rollout-check/SKILL.md  # K8s deployment health
+│   ├── crd-impact/SKILL.md     # CRD change impact analysis
+│   ├── prd-generator/          # PRD generation
+│   │   ├── SKILL.md
+│   │   ├── scripts/
+│   │   └── templates/
+│   ├── iterm2-driver/          # iTerm2 automation
+│   │   ├── SKILL.md
+│   │   └── examples/
+│   ├── cf-edge/SKILL.md        # Cloudflare deployment
+│   └── coderabbit/SKILL.md     # AI code reviews
 ├── README.md
 ├── LICENSE                      # MIT License
 ├── bin/

@@ -75,6 +75,35 @@ standard, multi-agent review, and user CLAUDE.md:
 11. **Structured output**: Skills should produce parseable tables/lists, not prose, to
     support agent-to-agent handoff.
 
+### Frontmatter policy (this repo)
+
+**Required fields** (every skill): `name`, `description`, `allowed-tools`, `argument-hint`.
+**Required on mutation skills**: `disable-model-invocation: true`.
+**Optional**: `effort`, `context`.
+**Not used in this repo**: `agent`, `user-invocable`, `hooks` — omit entirely.
+
+| Skill | Mutates? | `disable-model-invocation` | `allowed-tools` |
+|-------|----------|---------------------------|-----------------|
+| ci-gate | Yes (`--fix`) | `true` | `Bash, Read, Edit, Write, Glob` |
+| exec-plan | Yes (writes plan) | `true` | `Bash, Read, Write, Glob, Grep` |
+| ship-pr | Yes (commit/push/PR) | `true` | `Bash, Read, Grep, Glob` |
+| deslop | Yes (edits files) | `true` | `Read, Edit, Write, Glob, Grep` |
+| triage-pr | Yes (edits + replies) | `true` | `Bash, Read, Edit, Write, Grep, Glob` |
+| k8s-diff | No | omit | `Bash, Read, Grep, Glob` |
+| migration-guard | No | omit | `Bash, Read, Grep, Glob` |
+| api-compat | No | omit | `Bash, Read, Grep, Glob` |
+| rollout-check | No | omit | `Bash, Read, Grep, Glob` |
+| crd-impact | No | omit | `Bash, Read, Grep, Glob` |
+
+### Global baseline policy
+
+All diff/compat skills must define "compared to what." Defaults:
+- **File-based diffs**: `git merge-base HEAD main` (or default branch) unless args override.
+- **Cluster diffs** (`k8s-diff`, `rollout-check`): live cluster state via `kubectl`.
+- **CRD impact** (`crd-impact`): git diff of CRD file vs merge-base; if no git history, full scan.
+- **API compat** (`api-compat`): compare working tree vs merge-base for changed API files.
+- **Migration guard**: analyze migration files as-written (structural only — no live DB metadata).
+
 ### Frontmatter reference
 
 All fields from Claude Code docs ([source](https://code.claude.com/docs/en/slash-commands)):
@@ -87,10 +116,6 @@ All fields from Claude Code docs ([source](https://code.claude.com/docs/en/slash
     allowed-tools: Bash, Read, Grep, Glob  # Tool restrictions during execution.
     argument-hint: [args-description]      # Shown in autocomplete. Always include.
     effort: high                           # Override reasoning effort. Use on complex skills.
-    context: fork                          # Run in isolated subagent. Use for heavy/noisy skills.
-    agent: Explore                         # Subagent type (Explore, Plan, general-purpose).
-    user-invocable: false                  # Hide from / menu. For background knowledge only.
-    hooks: ...                             # Lifecycle hooks (pre/post).
     ---
 
 String substitutions available in skill body:
@@ -122,6 +147,11 @@ After all 10 are written, run validation.
 | SKILL.md under 100 lines; references/ for large content | Progressive disclosure + context budget optimization | 2026-03-23 |
 | Prerequisite checks in every tool-calling skill | Codex review flagged late failures as anti-pattern | 2026-03-23 |
 | Read-only K8s skills (no Edit/Write) | Infra inspection should report, not mutate | 2026-03-23 |
+| Global baseline policy for diff skills | Codex/Gemini council flagged "compared to what?" ambiguity | 2026-03-23 |
+| Explicit frontmatter policy table | Council found inconsistencies between global rules and per-skill specs | 2026-03-23 |
+| Secret masking in k8s-diff/rollout-check | Gemini flagged PII/secret leakage risk in cluster output | 2026-03-23 |
+| migration-guard is structural-only | Council: lock risk requires live metadata this skill cannot access | 2026-03-23 |
+| GraphQL added to api-compat | Codex caught spec promised GraphQL but body omitted it | 2026-03-23 |
 
 
 ---
@@ -159,7 +189,7 @@ description: >
   checks", "validate before PR", "CI gate", "does it pass CI", "is it clean",
   "run checks", or wants to verify the project builds and passes before pushing.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Glob
+allowed-tools: Bash, Read, Edit, Write, Glob
 argument-hint: [--fix to also auto-fix]
 ---
 ```
@@ -360,6 +390,7 @@ description: >
   "clean this up", "deslop", "remove slop", "clean code", "remove unnecessary
   comments", "simplify", "code hygiene", "polish this", "remove noise", or
   after an agent has generated code that needs cleanup.
+disable-model-invocation: true
 allowed-tools: Read, Edit, Write, Glob, Grep
 argument-hint: [file-or-directory]
 ---
@@ -474,8 +505,13 @@ argument-hint: <path-to-manifests> [--context <k8s-context>]
    - HIGH: resource limit reduction >50%, replicas→0, image tag→`latest`
    - MEDIUM: new CRD version, service port change, configmap key removal
    - LOW: label/annotation changes, resource request adjustments
-6. **Output**: Summary (N added, M modified, K removed) → Risk table → Full diff.
-7. `$ARGUMENTS`
+6. **Secret masking**: Filter diff output for keys matching `password`, `secret`, `token`,
+   `key`, `credential` — redact values before display.
+7. **Resource identity**: Match resources by `apiVersion/kind/namespace/name`. Resources
+   absent from cluster are flagged as NEW. Resources absent from render are flagged as ORPHANED.
+8. **Output**: Summary (N added, M modified, K removed) → Risk table → Full diff.
+9. **Idempotency**: Read-only inspection. Safe to re-run at any time.
+10. `$ARGUMENTS`
 
 
 ---
@@ -515,8 +551,11 @@ argument-hint: [migration-file-or-directory]
    - Backward compatibility: old app still works after migration? NOT NULL with DEFAULT?
    - Rollback path: down migration exists? data-safe rollback? forward-only documented?
    - Data preservation: safe type changes? ENUM additions vs removals?
-4. **Output**: Safety report table (`| Check | Status | Detail |`) + specific recommendations.
-5. `$ARGUMENTS`
+4. **Caveat**: Analysis is structural only — lock risk predictions require live table size/
+   stats/engine metadata which this skill does not access. State this in output.
+5. **Output**: Safety report table (`| Check | Status | Detail |`) + specific recommendations.
+6. **Idempotency**: Read-only analysis. Safe to re-run at any time.
+7. `$ARGUMENTS`
 
 
 ---
@@ -550,14 +589,18 @@ argument-hint: [api-definition-file]
 1. **Prerequisites**: Detect API type from changed files. Check for specialized tools
    (`buf` for proto, `oasdiff` for OpenAPI). Fall back to manual analysis if missing.
 2. **Scope**: `$ARGUMENTS` files, or API files changed since base branch.
-3. **Analysis by type**:
+3. **Baseline**: Compare working tree vs `git merge-base HEAD main` for changed API files.
+4. **Analysis by type**:
    - Protobuf: field number reuse, removal, type change, required addition (all BREAKING).
      New optional field, new enum value (SAFE). Use `buf breaking` if available.
    - OpenAPI: removed endpoints, changed method, removed params, new required params,
      response narrowing (BREAKING). Use `oasdiff` if available.
+   - GraphQL: removed type/field, changed return type, new required argument, removed
+     enum value (BREAKING). New optional field/argument, new type (SAFE).
    - Go exported API: removed symbol, changed signature, changed interface method set (BREAKING).
-4. **Output**: Compatibility report table (`| Change | File | Type | Severity |`).
-5. `$ARGUMENTS`
+5. **Output**: Compatibility report table (`| Change | File | Type | Severity |`).
+6. **Idempotency**: Read-only analysis. Safe to re-run at any time.
+7. `$ARGUMENTS`
 
 
 ---
@@ -601,9 +644,12 @@ argument-hint: <deployment-name> [-n namespace] [--context ctx]
    - Resource usage: `kubectl top pods` if metrics-server available (near-limit flags)
    - HPA status: `kubectl get hpa` matching deployment (current/target replicas)
    - Container logs: for unhealthy pods only, `--tail=20` (plus `--previous` if crashlooping)
-4. **Output**: Health dashboard table (`| Check | Status | Detail |`). Non-OK items get
+4. **Secret masking**: Filter output for keys matching `password`, `secret`, `token`,
+   `key`, `credential` — redact values before display.
+5. **Output**: Health dashboard table (`| Check | Status | Detail |`). Non-OK items get
    log/event excerpts below the table.
-5. `$ARGUMENTS`
+6. **Idempotency**: Read-only inspection. Safe to re-run at any time.
+7. `$ARGUMENTS`
 
 
 ---
@@ -634,20 +680,24 @@ argument-hint: <crd-file-or-group/version/kind>
 ---
 ```
 
-#### Body specification (~65 lines)
+#### Body specification (~70 lines)
 
-1. **Input**: Parse `$ARGUMENTS` for file path (read to extract group/version/kind/fields)
+1. **Prerequisites**: `grep`, `find` available (standard). `kubectl` optional (for live CRD fetch).
+2. **Input**: Parse `$ARGUMENTS` for file path (read to extract group/version/kind/fields)
    or group/version/kind identifier directly.
-2. **Analysis** (5 searches):
+3. **Baseline**: Diff CRD file vs `git merge-base HEAD main`. If no git history or new file,
+   perform full impact scan without field-level change classification.
+4. **Analysis** (5 searches):
    - Controllers: Go files importing CRD's API group, `Reconcile` functions, `SetupWithManager`
    - Webhooks: validating/mutating configs, `//+kubebuilder:webhook` markers
    - RBAC: `//+kubebuilder:rbac` markers, ClusterRole/Role YAML, `config/rbac/`
    - Manifests: sample CR YAML, test fixtures, Helm values/templates generating CRs
    - Client usage: generated clients, informers, listers, direct API calls, E2E tests
-3. **Impact assessment**: For each changed field (added/removed/type changed), list every
+5. **Impact assessment**: For each changed field (added/removed/type changed), list every
    file referencing it, classify as MUST UPDATE / SHOULD UPDATE / INFORMATIONAL.
-4. **Output**: Changes detected → Impact map table (`| File | Type | Impact | Reason |`).
-5. `$ARGUMENTS`
+6. **Output**: Changes detected → Impact map table (`| File | Type | Impact | Reason |`).
+7. **Idempotency**: Read-only analysis. Safe to re-run at any time.
+8. `$ARGUMENTS`
 
 
 ---
@@ -659,12 +709,18 @@ argument-hint: <crd-file-or-group/version/kind>
 After all 10 skills are written:
 
 1. **Visibility**: `ls skills/*/SKILL.md` — expect 14 entries (4 existing + 10 new).
-2. **Frontmatter valid**: Each SKILL.md starts with `---`, has `name:` and `description:`.
-3. **Context budget**: Total description text across all skills under 16,000 chars. Estimate
-   ~4,500 chars for new skills + ~3,000 for existing = well within budget.
-4. **No name collisions**: No overlap with existing skills (cf-edge, coderabbit, iterm2-driver,
+2. **YAML validity**: Each SKILL.md frontmatter is valid YAML between `---` delimiters.
+3. **Required fields**: Every skill has `name`, `description`, `allowed-tools`, `argument-hint`.
+4. **Mutation gating**: Every mutation skill (ci-gate, exec-plan, ship-pr, deslop, triage-pr)
+   has `disable-model-invocation: true`. Read-only skills omit it.
+5. **Tool policy**: `allowed-tools` matches the frontmatter policy table in Architecture section.
+6. **Line budget**: Each SKILL.md body under 100 lines. Description text across all 14 skills
+   under 16,000 chars total.
+7. **No name collisions**: No overlap with existing skills (cf-edge, coderabbit, iterm2-driver,
    prd-generator) or built-in commands (help, clear, compact, init, context, batch, etc.).
-5. **Dry-run each**: Invoke briefly to confirm skill loads and prerequisites section runs.
+8. **Idempotency**: Every skill documents re-run behavior.
+9. **Prerequisites**: Every skill calling external tools has `command -v` checks.
+10. **Installability**: `npx skills add` succeeds for each skill.
 
 
 ## Installation (post-merge)
@@ -693,3 +749,8 @@ After the PR merges to `indrasvat/claude-code-skills`:
   Skills best practices (progressive disclosure, disable-model-invocation, context:fork,
   effort, argument-hint, dynamic context injection, supporting files). Tailored to
   user CLAUDE.md preferences (Go-first, fail loud, zero-fluff, AskUserQuestion).
+- 2026-03-23: Incorporated dootsabha council feedback (Codex gpt-5.3-codex + Gemini
+  gemini-3-pro). Fixes: frontmatter policy table, global baseline policy, ci-gate
+  allowed-tools, deslop mutation gating, api-compat GraphQL coverage, crd-impact
+  baseline/prereqs, secret masking for k8s skills, structural-only caveat for
+  migration-guard, idempotency on all skills, strengthened validation checklist.

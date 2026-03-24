@@ -1,7 +1,7 @@
 {
   "name": "indrasvat-skills",
-  "description": "Claude Code skills for PRD generation with True Ralph Loop, robust iTerm2 TUI automation with verification and reporting, Cloudflare deployment, and CodeRabbit reviews",
-  "version": "1.2.0",
+  "description": "14 Claude Code skills: CI gating, exec plans, PR shipping, code cleanup, PR triage, K8s diffing, migration safety, API compat, rollout health, CRD impact analysis, PRD generation, iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
+  "version": "1.3.0",
   "commands": "./commands/",
   "skills": "./skills/",
   "author": {

@@ -18,9 +18,10 @@ Render manifests, diff against cluster or git, flag risks. Read-only.
 ## 1. Prerequisites
 - `command -v kubectl` -- REQUIRED. Abort immediately if missing.
 - `helm`, `kustomize` -- optional, detected from input. `kubectl kustomize` as fallback.
-- Run `kubectl cluster-info` to confirm access. Print `kubectl config current-context`.
 - If `--context` in `$ARGUMENTS`, pass `--context <value>` to all kubectl calls.
-- Fail fast if kubectl missing or cluster unreachable.
+- Run `kubectl cluster-info` to test access. If unreachable, set `CLUSTER_AVAILABLE=false`
+  and continue (git-based diff still works). Print `kubectl config current-context` if available.
+- Fail fast only if kubectl binary is missing.
 
 ## 2. Detection
 Determine type from input path in `$ARGUMENTS`:

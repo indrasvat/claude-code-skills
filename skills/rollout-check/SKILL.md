@@ -39,7 +39,7 @@ Run these in parallel where possible. Capture stdout/stderr and exit code for ea
 
 **Pod status**: `kubectl get pods -l app=<name> -o wide $NS_FLAG $CTX_FLAG`. Count pods by state: Ready, NotReady, Pending, CrashLoopBackOff, Evicted. Flag any pod not fully ready.
 
-**Recent events**: `kubectl get events --field-selector involvedObject.name=<name> --sort-by=.lastTimestamp $NS_FLAG $CTX_FLAG`. Flag Warning-type events, back-off messages, and errors.
+**Recent events**: Collect events for the deployment AND its pods: `kubectl get events --sort-by=.lastTimestamp $NS_FLAG $CTX_FLAG` and filter for events where `involvedObject.name` matches the deployment, its ReplicaSets, or its pods (use label selector `app=<name>` to identify related objects). Flag Warning-type events, back-off messages, and errors.
 
 **Resource usage**: `kubectl top pods -l app=<name> $NS_FLAG $CTX_FLAG`. If metrics-server is unavailable (non-zero exit), skip gracefully and note it. Flag pods using >80% of their CPU or memory limits.
 

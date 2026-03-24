@@ -9,6 +9,7 @@ description: >
   down", "plan the work", "write up the approach", or when a task is complex
   enough to warrant planning before implementation.
 disable-model-invocation: true
+allowed-tools: Bash, Read, Write, Glob, Grep
 argument-hint: <task-description>
 effort: high
 ---

@@ -53,7 +53,7 @@ For any FAIL row, print its full error output below the table. Exit with code 1 
 
 If `$ARGUMENTS` contains `--fix`, run auto-fix variants BEFORE the regular checks:
 - Go: `golangci-lint run --fix ./...`
-- JS/TS: `<pm> run lint --fix` or `turbo run lint -- --fix`
+- JS/TS: `<pm> run lint -- --fix` (the `--` is required for npm to forward args) or `turbo run lint -- --fix`
 - Rust: `cargo clippy --fix --allow-dirty -- -D warnings`
 - Python: `ruff check --fix .`, `ruff format .`
 

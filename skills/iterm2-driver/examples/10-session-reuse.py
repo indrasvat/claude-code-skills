@@ -18,8 +18,9 @@ Usage:
     uv run 10-session-reuse.py
 """
 
-import iterm2
 import asyncio
+
+import iterm2
 
 
 async def dump_screen(session, label: str):

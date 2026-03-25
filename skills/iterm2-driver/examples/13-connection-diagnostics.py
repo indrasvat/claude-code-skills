@@ -44,9 +44,7 @@ import time
 # PRE-CONNECTION CHECKS (no iTerm2 import needed)
 # ============================================================
 
-SOCKET_PATH = os.path.expanduser(
-    "~/Library/Application Support/iTerm2/private/socket"
-)
+SOCKET_PATH = os.path.expanduser("~/Library/Application Support/iTerm2/private/socket")
 results = {"passed": 0, "failed": 0, "tests": []}
 
 
@@ -102,9 +100,10 @@ def main_sync():
         log_result("Socket Exists", "PASS", f"Age: {age_s:.0f}s")
     else:
         log_result(
-            "Socket Exists", "FAIL",
+            "Socket Exists",
+            "FAIL",
             f"Not found at: {SOCKET_PATH}",
-            "Enable Python API: iTerm2 > Preferences > General > Magic > Enable Python API"
+            "Enable Python API: iTerm2 > Preferences > General > Magic > Enable Python API",
         )
         return print_summary()
 
@@ -122,9 +121,10 @@ def main_sync():
         log_result("Socket Connectable", "PASS")
     except ConnectionRefusedError:
         log_result(
-            "Socket Connectable", "FAIL",
+            "Socket Connectable",
+            "FAIL",
             "Connection refused — socket is stale",
-            "Restart iTerm2: osascript -e 'tell application \"iTerm\" to quit' && sleep 2 && open -a iTerm"
+            "Restart iTerm2: osascript -e 'tell application \"iTerm\" to quit' && sleep 2 && open -a iTerm",
         )
         # Check if removing stale socket helps
         return print_summary()
@@ -139,15 +139,18 @@ def main_sync():
     print("CHECK 3: iTerm2 Process")
     print("=" * 60)
 
-    result = subprocess.run(["pgrep", "-x", "iTerm2"], capture_output=True)
+    result = subprocess.run(
+        ["pgrep", "-x", "iTerm2"], capture_output=True, check=False
+    )
     if result.returncode == 0:
         pid = result.stdout.decode().strip().split("\n")[0]
         log_result("iTerm2 Running", "PASS", f"PID: {pid}")
     else:
         log_result(
-            "iTerm2 Running", "FAIL",
+            "iTerm2 Running",
+            "FAIL",
             "iTerm2 process not found",
-            "Start iTerm2: open -a iTerm"
+            "Start iTerm2: open -a iTerm",
         )
         return print_summary()
 
@@ -160,8 +163,9 @@ def main_sync():
 
 def main_async_wrapper():
     """Run the async API checks."""
-    import iterm2
     import asyncio
+
+    import iterm2
 
     async def api_checks(connection):
         # ============================================================
@@ -212,9 +216,15 @@ def main_async_wrapper():
             if test_window.current_tab and test_window.current_tab.current_session:
                 test_session = test_window.current_tab.current_session
                 await test_session.async_set_name("diagnostics-test")
-                log_result("Session Creation", "PASS", f"Session: {test_session.session_id}")
+                log_result(
+                    "Session Creation", "PASS", f"Session: {test_session.session_id}"
+                )
             else:
-                log_result("Session Creation", "FAIL", "Window created but tab/session not ready after refresh")
+                log_result(
+                    "Session Creation",
+                    "FAIL",
+                    "Window created but tab/session not ready after refresh",
+                )
         except Exception as e:
             log_result("Session Creation", "FAIL", str(e))
 
@@ -241,7 +251,9 @@ def main_async_wrapper():
             if found:
                 log_result("Screen Read", "PASS", f"Marker '{marker}' found on screen")
             else:
-                log_result("Screen Read", "FAIL", "Sent text but could not read it back")
+                log_result(
+                    "Screen Read", "FAIL", "Sent text but could not read it back"
+                )
         except Exception as e:
             log_result("Screen Read", "FAIL", str(e))
 
@@ -254,6 +266,7 @@ def main_async_wrapper():
 
         try:
             import Quartz
+
             frame = await test_window.async_get_frame()
             # Use position-based matching (same pattern as SKILL.md)
             window_list = Quartz.CGWindowListCopyWindowInfo(
@@ -276,21 +289,32 @@ def main_async_wrapper():
 
             if best_id and best_score < 30:
                 path = "/tmp/iterm2_diag_screenshot.png"
-                subprocess.run(["screencapture", "-x", "-l", str(best_id), path], check=True)
+                subprocess.run(
+                    ["screencapture", "-x", "-l", str(best_id), path], check=True
+                )
                 if os.path.exists(path) and os.path.getsize(path) > 1000:
-                    log_result("Screenshot", "PASS",
-                               f"{os.path.getsize(path)} bytes (Quartz ID={best_id})")
+                    log_result(
+                        "Screenshot",
+                        "PASS",
+                        f"{os.path.getsize(path)} bytes (Quartz ID={best_id})",
+                    )
                     os.unlink(path)
                 else:
                     log_result("Screenshot", "FAIL", "File too small or missing")
             else:
-                log_result("Screenshot", "FAIL",
-                           "No matching iTerm2 window in Quartz",
-                           "Ensure iTerm2 is not minimized and Screen Recording permission is granted")
+                log_result(
+                    "Screenshot",
+                    "FAIL",
+                    "No matching iTerm2 window in Quartz",
+                    "Ensure iTerm2 is not minimized and Screen Recording permission is granted",
+                )
         except ImportError:
-            log_result("Screenshot", "FAIL",
-                       "Quartz not available",
-                       "Add pyobjc-framework-Quartz to dependencies")
+            log_result(
+                "Screenshot",
+                "FAIL",
+                "Quartz not available",
+                "Add pyobjc-framework-Quartz to dependencies",
+            )
         except Exception as e:
             log_result("Screenshot", "FAIL", str(e))
 
@@ -310,23 +334,28 @@ def main_async_wrapper():
                 pass  # Session may auto-close after exit
             log_result("Cleanup", "PASS")
         except Exception as e:
-            log_result("Cleanup", "FAIL", str(e),
-                       "Session may have already been closed")
+            log_result(
+                "Cleanup", "FAIL", str(e), "Session may have already been closed"
+            )
 
         return print_summary()
 
     try:
         exit_code = iterm2.run_until_complete(api_checks)
-        return exit_code if exit_code else 0
+        return exit_code or 0
     except Exception as e:
-        log_result("API Connection", "FAIL", str(e),
-                   "Is iTerm2 running with Python API enabled?")
+        log_result(
+            "API Connection",
+            "FAIL",
+            str(e),
+            "Is iTerm2 running with Python API enabled?",
+        )
         return print_summary()
 
 
 if __name__ == "__main__":
     sync_result = main_sync()
     if sync_result is not None:
-        exit(sync_result)
+        sys.exit(sync_result)
     exit_code = main_async_wrapper()
-    exit(exit_code if exit_code else 0)
+    sys.exit(exit_code or 0)

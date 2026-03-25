@@ -38,11 +38,13 @@ Usage:
     uv run 12-parallel-agents.py
 """
 
-import iterm2
 import asyncio
-import subprocess
 import os
+import subprocess
+import sys
 import time
+
+import iterm2
 
 # ============================================================
 # CONFIGURATION
@@ -133,6 +135,7 @@ async def capture_screenshot(window, name):
 # READINESS + VERIFICATION HELPERS
 # ============================================================
 
+
 async def create_agent_window(connection, agent_id, x_pos, width=650, height=450):
     """Create a window with readiness probes and app-refresh pattern."""
     window = await iterm2.Window.async_create(connection)
@@ -185,10 +188,13 @@ async def screen_lines(session):
 # AGENT WORK FUNCTIONS
 # ============================================================
 
+
 async def agent_1_git(session, window):
     """Agent 1: Git operations."""
     marker = "AGENT1_MARKER_GIT"
-    await session.async_send_text(f"echo '{marker}' && git log --oneline -5 2>/dev/null || echo 'no git repo'\n")
+    await session.async_send_text(
+        f"echo '{marker}' && git log --oneline -5 2>/dev/null || echo 'no git repo'\n"
+    )
     await asyncio.sleep(1.0)
     found = await verify_text(session, marker, timeout=3)
     await capture_screenshot(window, "parallel_agent1_git")
@@ -198,7 +204,9 @@ async def agent_1_git(session, window):
 async def agent_2_sysinfo(session, window):
     """Agent 2: System information."""
     marker = "AGENT2_MARKER_SYS"
-    await session.async_send_text(f"echo '{marker}' && uptime && sysctl -n machdep.cpu.brand_string\n")
+    await session.async_send_text(
+        f"echo '{marker}' && uptime && sysctl -n machdep.cpu.brand_string\n"
+    )
     await asyncio.sleep(1.0)
     found = await verify_text(session, marker, timeout=3)
     await capture_screenshot(window, "parallel_agent2_sysinfo")
@@ -208,7 +216,9 @@ async def agent_2_sysinfo(session, window):
 async def agent_3_files(session, window):
     """Agent 3: File listing."""
     marker = "AGENT3_MARKER_FS"
-    await session.async_send_text(f"echo '{marker}' && df -h / && ls /tmp/*.py 2>/dev/null | head -5\n")
+    await session.async_send_text(
+        f"echo '{marker}' && df -h / && ls /tmp/*.py 2>/dev/null | head -5\n"
+    )
     await asyncio.sleep(1.0)
     found = await verify_text(session, marker, timeout=3)
     await capture_screenshot(window, "parallel_agent3_files")
@@ -218,6 +228,7 @@ async def agent_3_files(session, window):
 # ============================================================
 # MAIN
 # ============================================================
+
 
 async def cleanup_stale_windows(connection, prefix="parallel-agent-"):
     """Close windows from previous crashed runs."""
@@ -275,7 +286,7 @@ async def main(connection):
         print("=" * 60)
 
         agent_results = await asyncio.gather(
-            *[fn(sess, win) for fn, (_, win, sess) in zip(agent_fns, agents)]
+            *[fn(sess, win) for fn, (_, win, sess) in zip(agent_fns, agents, strict=False)]
         )
         all_found = all(found for found, _ in agent_results)
         if all_found:
@@ -291,15 +302,23 @@ async def main(connection):
         print("TEST 3: Independent Screenshots")
         print("=" * 60)
 
-        screenshots = os.listdir(SCREENSHOT_DIR) if os.path.exists(SCREENSHOT_DIR) else []
+        screenshots = (
+            os.listdir(SCREENSHOT_DIR) if os.path.exists(SCREENSHOT_DIR) else []
+        )
         parallel_shots = [f for f in screenshots if f.startswith("parallel_")]
         if len(parallel_shots) >= 3:
             sizes = [os.path.getsize(f"{SCREENSHOT_DIR}/{f}") for f in parallel_shots]
-            log_result("Independent Screenshots", "PASS",
-                       f"{len(parallel_shots)} screenshots, sizes: {sizes}")
+            log_result(
+                "Independent Screenshots",
+                "PASS",
+                f"{len(parallel_shots)} screenshots, sizes: {sizes}",
+            )
         else:
-            log_result("Independent Screenshots", "FAIL",
-                       f"Only {len(parallel_shots)} screenshots (expected 3)")
+            log_result(
+                "Independent Screenshots",
+                "FAIL",
+                f"Only {len(parallel_shots)} screenshots (expected 3)",
+            )
 
         # ============================================================
         # TEST 4: Session Isolation
@@ -339,7 +358,7 @@ async def main(connection):
         print("CLEANUP")
         print("=" * 60)
 
-        for agent_id, _, session in agents:
+        for _agent_id, _, session in agents:
             try:
                 await session.async_send_text("exit\n")
                 await asyncio.sleep(0.2)
@@ -355,4 +374,4 @@ async def main(connection):
 
 if __name__ == "__main__":
     exit_code = iterm2.run_until_complete(main)
-    exit(exit_code if exit_code else 0)
+    sys.exit(exit_code or 0)

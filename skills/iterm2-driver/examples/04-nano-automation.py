@@ -41,13 +41,16 @@ Usage:
     uv run 04-nano-automation.py
 """
 
-import iterm2
 import asyncio
 import os
+import sys
+
+import iterm2
 
 # ============================================================
 # CLEANUP HELPER
 # ============================================================
+
 
 async def cleanup_session(session):
     """Perform multi-level cleanup on a session."""
@@ -88,6 +91,7 @@ async def dump_screen(session, label: str):
 # ============================================================
 # MAIN
 # ============================================================
+
 
 async def main(connection):
     # Create own window (parallel-safe, never use current_terminal_window)
@@ -187,7 +191,7 @@ async def main(connection):
                 print(f"   File created: {filepath}")
 
                 # Show file contents
-                with open(filepath, 'r') as f:
+                with open(filepath) as f:
                     contents = f.read()
                 print(f"   File contents:\n{contents}")
 
@@ -196,15 +200,13 @@ async def main(connection):
                 print("   Temp file cleaned up")
                 print("\n--- TEST PASSED ---")
                 return 0
-            else:
-                print(f"   WARNING: File not found at {filepath}")
-                print("\n--- TEST PASSED (with warning) ---")
-                return 0
-        else:
-            print("   WARNING: May still be in Nano")
-            await dump_screen(session, "nano_exit_check")
-            print("\n--- TEST INCOMPLETE ---")
-            return 1
+            print(f"   WARNING: File not found at {filepath}")
+            print("\n--- TEST PASSED (with warning) ---")
+            return 0
+        print("   WARNING: May still be in Nano")
+        await dump_screen(session, "nano_exit_check")
+        print("\n--- TEST INCOMPLETE ---")
+        return 1
 
     except Exception as e:
         print(f"\nERROR: {e}")
@@ -221,4 +223,4 @@ async def main(connection):
 
 if __name__ == "__main__":
     exit_code = iterm2.run_until_complete(main)
-    exit(exit_code if exit_code else 0)
+    sys.exit(exit_code or 0)

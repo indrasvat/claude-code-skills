@@ -22,8 +22,9 @@ Usage:
     uv run 07-cleanup-sessions.py
 """
 
-import iterm2
 import asyncio
+
+import iterm2
 
 
 async def dump_screen(session, label: str):
@@ -74,7 +75,7 @@ async def main(connection):
     try:
         # Create a few extra tabs to demonstrate cleanup
         print("Creating extra tabs for cleanup demonstration...")
-        for i in range(3):
+        for _i in range(3):
             tab = await window.async_create_tab()
             created_sessions.append(tab.current_session)
             await asyncio.sleep(0.1)

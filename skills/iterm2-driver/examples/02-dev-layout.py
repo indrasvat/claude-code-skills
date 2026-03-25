@@ -28,8 +28,9 @@ Usage:
     uv run 02-dev-layout.py
 """
 
-import iterm2
 import asyncio
+
+import iterm2
 
 
 async def main(connection):

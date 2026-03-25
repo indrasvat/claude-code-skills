@@ -18,15 +18,16 @@ Usage:
     uv run 08-badge-control.py
 """
 
-import iterm2
 import asyncio
 import base64
+
+import iterm2
 
 
 async def set_badge(session, text):
     """Set the badge text for a session using iTerm2 escape sequences."""
     # OSC 1337 ; SetBadgeFormat=Base64 ST
-    data = base64.b64encode(text.encode('utf-8')).decode('utf-8')
+    data = base64.b64encode(text.encode("utf-8")).decode("utf-8")
     cmd = f"\x1b]1337;SetBadgeFormat={data}\x07"
     await session.async_send_text(cmd)
 

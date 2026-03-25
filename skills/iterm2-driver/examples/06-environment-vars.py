@@ -22,10 +22,11 @@ Usage:
     uv run 06-environment-vars.py
 """
 
-import iterm2
 import asyncio
 import os
 import shlex
+
+import iterm2
 
 
 async def dump_screen(session, label: str):

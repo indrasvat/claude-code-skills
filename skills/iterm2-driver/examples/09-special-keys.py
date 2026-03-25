@@ -29,8 +29,9 @@ Usage:
     uv run 09-special-keys.py
 """
 
-import iterm2
 import asyncio
+
+import iterm2
 
 
 async def dump_screen(session, label: str):

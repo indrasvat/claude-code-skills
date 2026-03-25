@@ -53,12 +53,14 @@ Usage:
     uv run 00-comprehensive-template.py
 """
 
-import iterm2
 import asyncio
-import subprocess
 import os
+import subprocess
+import sys
 import time
 from datetime import datetime
+
+import iterm2
 
 # ============================================================
 # CONFIGURATION
@@ -82,14 +84,18 @@ results = {
 }
 
 
-def log_result(test_name: str, status: str, details: str = "", screenshot: str = None):
+def log_result(
+    test_name: str, status: str, details: str = "", screenshot: str | None = None
+):
     """Log a test result."""
-    results["tests"].append({
-        "name": test_name,
-        "status": status,
-        "details": details,
-        "screenshot": screenshot,
-    })
+    results["tests"].append(
+        {
+            "name": test_name,
+            "status": status,
+            "details": details,
+            "screenshot": screenshot,
+        }
+    )
     if screenshot:
         results["screenshots"].append(screenshot)
 
@@ -135,7 +141,7 @@ def print_summary() -> int:
     return 0
 
 
-def print_test_header(test_name: str, test_num: int = None):
+def print_test_header(test_name: str, test_num: int | None = None):
     header = f"TEST {test_num}: {test_name}" if test_num else f"TEST: {test_name}"
     print(f"\n{'=' * 60}")
     print(header)
@@ -201,6 +207,7 @@ async def capture_screenshot(window, name: str) -> str:
 # VERIFICATION HELPERS
 # ============================================================
 
+
 async def verify_screen_contains(session, expected: str, description: str) -> bool:
     """Wait for expected text to appear on screen within timeout."""
     start = time.monotonic()
@@ -254,6 +261,7 @@ async def dump_screen(session, label: str):
 # WINDOW CREATION WITH READINESS PROBES
 # ============================================================
 
+
 async def create_test_window(connection, name="test", x_pos=100):
     """Create an isolated test window with full readiness verification.
 
@@ -287,10 +295,12 @@ async def create_test_window(connection, name="test", x_pos=100):
 
     # Position window (enables Quartz screenshot targeting)
     frame = await window.async_get_frame()
-    await window.async_set_frame(iterm2.Frame(
-        iterm2.Point(x_pos, frame.origin.y),
-        iterm2.Size(frame.size.width, frame.size.height),
-    ))
+    await window.async_set_frame(
+        iterm2.Frame(
+            iterm2.Point(x_pos, frame.origin.y),
+            iterm2.Size(frame.size.width, frame.size.height),
+        )
+    )
     await asyncio.sleep(0.3)
 
     # Verify screen is readable
@@ -305,7 +315,8 @@ async def create_test_window(connection, name="test", x_pos=100):
 # CLEANUP
 # ============================================================
 
-async def cleanup_session(session, quit_key: str = None):
+
+async def cleanup_session(session, quit_key: str | None = None):
     """Perform multi-level cleanup on a session."""
     print("\n  Performing cleanup...")
     try:
@@ -325,6 +336,7 @@ async def cleanup_session(session, quit_key: str = None):
 # ============================================================
 # MAIN TEST FUNCTION
 # ============================================================
+
 
 async def main(connection):
     """Main test function demonstrating all patterns."""
@@ -395,7 +407,9 @@ async def main(connection):
         # ============================================================
         print_test_header("Final State", 4)
         screenshot = await capture_screenshot(window, "template_final")
-        log_result("Final State", "PASS", "Final screenshot captured", screenshot=screenshot)
+        log_result(
+            "Final State", "PASS", "Final screenshot captured", screenshot=screenshot
+        )
 
     except Exception as e:
         print(f"\nERROR during test execution: {e}")
@@ -411,4 +425,4 @@ async def main(connection):
 
 if __name__ == "__main__":
     exit_code = iterm2.run_until_complete(main)
-    exit(exit_code if exit_code else 0)
+    sys.exit(exit_code or 0)

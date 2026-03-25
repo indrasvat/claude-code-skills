@@ -40,8 +40,10 @@ Usage:
     uv run 03-repl-driver.py
 """
 
-import iterm2
 import asyncio
+import sys
+
+import iterm2
 
 # ============================================================
 # RESULT TRACKING
@@ -78,9 +80,11 @@ def print_summary() -> int:
 # VERIFICATION HELPERS
 # ============================================================
 
+
 async def verify_screen_contains(session, expected: str, timeout: float = 5.0) -> bool:
     """Check if expected text appears on screen within timeout."""
     import time
+
     start = time.monotonic()
     while (time.monotonic() - start) < timeout:
         screen = await session.async_get_screen_contents()
@@ -106,6 +110,7 @@ async def dump_screen(session, label: str):
 # CLEANUP HELPER
 # ============================================================
 
+
 async def cleanup_session(session):
     """Perform multi-level cleanup on a session."""
     try:
@@ -123,6 +128,7 @@ async def cleanup_session(session):
 # ============================================================
 # MAIN TEST
 # ============================================================
+
 
 async def main(connection):
     # Create own window (parallel-safe, never use current_terminal_window)
@@ -168,7 +174,9 @@ async def main(connection):
         if await verify_screen_contains(session, ">>>", timeout=2.0):
             log_result("Define Function", "PASS")
         else:
-            log_result("Define Function", "FAIL", "Prompt not returned after definition")
+            log_result(
+                "Define Function", "FAIL", "Prompt not returned after definition"
+            )
 
         # ============================================================
         # TEST 3: Execute Function
@@ -180,7 +188,11 @@ async def main(connection):
         if await verify_screen_contains(session, "MARKER_RESULT: 20"):
             log_result("Execute Function", "PASS")
         else:
-            log_result("Execute Function", "FAIL", "Expected output 'MARKER_RESULT: 20' not found")
+            log_result(
+                "Execute Function",
+                "FAIL",
+                "Expected output 'MARKER_RESULT: 20' not found",
+            )
             await dump_screen(session, "execution_failed")
 
         # ============================================================
@@ -225,4 +237,4 @@ async def main(connection):
 
 if __name__ == "__main__":
     exit_code = iterm2.run_until_complete(main)
-    exit(exit_code if exit_code else 0)
+    sys.exit(exit_code or 0)

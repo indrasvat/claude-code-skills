@@ -26,9 +26,10 @@ Usage:
     uv run 01-basic-tab.py
 """
 
-import iterm2
 import asyncio
 import time
+
+import iterm2
 
 
 async def main(connection):
@@ -56,7 +57,7 @@ async def main(connection):
     try:
         # Run a command
         await session.async_send_text("ls -la\n")
-        print(f"  Created window, sent 'ls -la'")
+        print("  Created window, sent 'ls -la'")
 
         # Verify output appeared
         start = time.monotonic()

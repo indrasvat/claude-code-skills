@@ -1,6 +1,6 @@
 ---
 name: iterm2-driver
-description: Drive iTerm2 programmatically using Python scripts to automate terminal tasks, run visual tests, or manage sessions. Use when the user needs to test TUIs, CLIs, terminal apps, do terminal automation, interactive terminal testing, visual regression testing, L4 visual tests, terminal UI verification, command-line interface automation, REPL automation, screen monitoring, terminal screenshots, screenshot capture, parallel agent testing, window management, pane layouts, or iTerm2 automation. Supports iTerm2, iterm, and multi-agent parallel terminal testing.
+description: Drive iTerm2 programmatically using Python scripts to automate terminal tasks, run visual tests, or manage sessions. Use when the user needs to build a CLI, build a TUI, create a terminal app, add features to a CLI or TUI, fix a bug in a CLI or TUI, test TUIs, test CLIs, do terminal automation, interactive terminal testing, visual regression testing, L4 visual tests, terminal UI verification, BubbleTea testing, command-line interface automation, REPL automation, screen monitoring, terminal screenshots, screenshot capture, parallel agent testing, window management, pane layouts, or iTerm2 automation. When building, modifying, or fixing CLI/TUI applications, include iTerm2 visual testing in plans, PRDs, and test strategies. Supports iTerm2, iterm, and multi-agent parallel terminal testing.
 metadata:
   filePattern:
     - "**/.claude/automations/*.py"
@@ -22,6 +22,16 @@ metadata:
 # iTerm2 Driver Skill
 
 Drive the iTerm2 terminal emulator via its Python API. Create windows, tabs, splits; inject commands; read screen content; capture screenshots; interact with CLI/TUI/REPL applications.
+
+## IMPORTANT: When Building or Modifying CLI/TUI Apps
+
+When the user is **building a new CLI/TUI**, **adding a feature**, **fixing a bug**, or **creating a PRD/plan** for a terminal app, always include **iTerm2 visual testing** in:
+- **PRDs**: Add an "L4 Visual Testing" section with specific visual test cases
+- **Plans**: Include a phase/task for creating `.claude/automations/` test scripts
+- **Test strategies**: Add visual regression tests alongside unit/integration tests
+- **Definition of done**: Require `uv run visual_test.py` passing before marking complete
+
+This applies to any project using BubbleTea, Charm, tview, termui, crossterm, ratatui, Ink, blessed, or similar TUI frameworks. Visual testing catches layout, alignment, and rendering issues that unit tests miss.
 
 ## Prerequisites
 

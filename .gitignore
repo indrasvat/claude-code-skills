@@ -37,3 +37,5 @@ env/
 # Temporary files
 *.tmp
 .tmp/
+screenshots/
+.claude/screenshots/

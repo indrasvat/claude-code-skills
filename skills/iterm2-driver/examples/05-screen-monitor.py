@@ -36,8 +36,10 @@ Usage:
     uv run 05-screen-monitor.py
 """
 
-import iterm2
 import asyncio
+import sys
+
+import iterm2
 
 # ============================================================
 # RESULT TRACKING
@@ -74,6 +76,7 @@ def print_summary() -> int:
 # CLEANUP HELPER
 # ============================================================
 
+
 async def cleanup_session(session):
     """Perform multi-level cleanup."""
     try:
@@ -90,16 +93,24 @@ async def cleanup_session(session):
 # MAIN
 # ============================================================
 
+
 async def main(connection):
+    # Create own window (parallel-safe, with app-refresh)
+    window = await iterm2.Window.async_create(connection)
+    await asyncio.sleep(0.5)
     app = await iterm2.async_get_app(connection)
-    window = app.current_terminal_window
+    if window.current_tab is None:
+        for w in app.terminal_windows:
+            if w.window_id == window.window_id:
+                window = w
+                break
+    for _ in range(20):
+        if window.current_tab and window.current_tab.current_session:
+            break
+        await asyncio.sleep(0.2)
 
-    if window is None:
-        print("ERROR: No active window found")
-        return 1
-
-    tab = await window.async_create_tab()
-    session = tab.current_session
+    session = window.current_tab.current_session
+    await session.async_set_name("screen-monitor")
 
     try:
         print("\n--- SCREEN STREAMING TEST ---\n")
@@ -130,7 +141,7 @@ async def main(connection):
                 screen_contents = await streamer.async_get()
                 updates_captured += 1
 
-                print(f"\n  --- Screen Update {i+1} ---")
+                print(f"\n  --- Screen Update {i + 1} ---")
                 # Print the non-empty lines
                 for j in range(screen_contents.number_of_lines):
                     line = screen_contents.line(j).string
@@ -143,9 +154,13 @@ async def main(connection):
         if updates_captured >= 5 and ping_output_found:
             log_result("Monitor Updates", "PASS")
         elif updates_captured >= 5:
-            log_result("Monitor Updates", "PASS", "Updates captured but ping pattern not found")
+            log_result(
+                "Monitor Updates", "PASS", "Updates captured but ping pattern not found"
+            )
         else:
-            log_result("Monitor Updates", "FAIL", f"Only captured {updates_captured} updates")
+            log_result(
+                "Monitor Updates", "FAIL", f"Only captured {updates_captured} updates"
+            )
 
         # ============================================================
         # TEST 3: Stop Process
@@ -184,4 +199,4 @@ async def main(connection):
 
 if __name__ == "__main__":
     exit_code = iterm2.run_until_complete(main)
-    exit(exit_code if exit_code else 0)
+    sys.exit(exit_code or 0)

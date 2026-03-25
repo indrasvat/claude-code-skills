@@ -49,11 +49,13 @@ Usage:
 Note: This example uses 'htop' as a test subject. Replace with your TUI app.
 """
 
-import iterm2
 import asyncio
-import subprocess
 import os
+import subprocess
+import sys
 from datetime import datetime
+
+import iterm2
 
 # ============================================================
 # CONFIGURATION
@@ -64,10 +66,10 @@ TARGET_APP = "htop"  # Change to your TUI app
 
 # Box-drawing character sets
 BOX_CHARS = {
-    'corners': '┌┐└┘╭╮╰╯╔╗╚╝',
-    'horizontal': '─═━',
-    'vertical': '│║┃',
-    'junctions': '├┤┬┴┼╠╣╦╩╬',
+    "corners": "┌┐└┘╭╮╰╯╔╗╚╝",
+    "horizontal": "─═━",
+    "vertical": "│║┃",
+    "junctions": "├┤┬┴┼╠╣╦╩╬",
 }
 
 # ============================================================
@@ -118,12 +120,13 @@ try:
 
     def get_iterm2_window_id():
         window_list = Quartz.CGWindowListCopyWindowInfo(
-            Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
-            Quartz.kCGNullWindowID
+            Quartz.kCGWindowListOptionOnScreenOnly
+            | Quartz.kCGWindowListExcludeDesktopElements,
+            Quartz.kCGNullWindowID,
         )
         for window in window_list:
-            if 'iTerm' in window.get('kCGWindowOwnerName', ''):
-                return window.get('kCGWindowNumber')
+            if "iTerm" in window.get("kCGWindowOwnerName", ""):
+                return window.get("kCGWindowNumber")
         return None
 except ImportError:
     print("WARNING: Quartz not available, screenshots will capture full screen")
@@ -140,7 +143,9 @@ def capture_screenshot(name: str) -> str:
 
     window_id = get_iterm2_window_id()
     if window_id:
-        subprocess.run(["screencapture", "-x", "-l", str(window_id), filepath], check=True)
+        subprocess.run(
+            ["screencapture", "-x", "-l", str(window_id), filepath], check=True
+        )
     else:
         subprocess.run(["screencapture", "-x", filepath], check=True)
 
@@ -152,14 +157,19 @@ def capture_screenshot(name: str) -> str:
 # LAYOUT VERIFICATION FUNCTIONS
 # ============================================================
 
+
 async def verify_box_integrity(session, description: str = "UI") -> dict:
     """Check that box-drawing characters form complete, connected boxes."""
     screen = await session.async_get_screen_contents()
     issues = []
     box_lines = []
 
-    all_box_chars = (BOX_CHARS['corners'] + BOX_CHARS['horizontal'] +
-                     BOX_CHARS['vertical'] + BOX_CHARS['junctions'])
+    all_box_chars = (
+        BOX_CHARS["corners"]
+        + BOX_CHARS["horizontal"]
+        + BOX_CHARS["vertical"]
+        + BOX_CHARS["junctions"]
+    )
 
     for i in range(screen.number_of_lines):
         line = screen.line(i).string
@@ -171,36 +181,66 @@ async def verify_box_integrity(session, description: str = "UI") -> dict:
     for line_num, line in box_lines:
         for j, char in enumerate(line):
             # Top-left corners should connect right
-            if char in '┌╭╔':
+            if char in "┌╭╔":
                 if j + 1 < len(line):
                     next_char = line[j + 1]
-                    if next_char not in BOX_CHARS['horizontal'] + BOX_CHARS['junctions'] + BOX_CHARS['corners']:
-                        issues.append(f"Line {line_num}, col {j}: '{char}' not connected to horizontal edge (found '{next_char}')")
+                    if (
+                        next_char
+                        not in BOX_CHARS["horizontal"]
+                        + BOX_CHARS["junctions"]
+                        + BOX_CHARS["corners"]
+                    ):
+                        issues.append(
+                            f"Line {line_num}, col {j}: '{char}' not connected to horizontal edge (found '{next_char}')"
+                        )
 
             # Top-right corners should connect left
-            elif char in '┐╮╗':
+            elif char in "┐╮╗":
                 if j > 0:
                     prev_char = line[j - 1]
-                    if prev_char not in BOX_CHARS['horizontal'] + BOX_CHARS['junctions'] + BOX_CHARS['corners']:
-                        issues.append(f"Line {line_num}, col {j}: '{char}' not connected to horizontal edge (found '{prev_char}')")
+                    if (
+                        prev_char
+                        not in BOX_CHARS["horizontal"]
+                        + BOX_CHARS["junctions"]
+                        + BOX_CHARS["corners"]
+                    ):
+                        issues.append(
+                            f"Line {line_num}, col {j}: '{char}' not connected to horizontal edge (found '{prev_char}')"
+                        )
 
             # Bottom corners similar checks
-            elif char in '└╰╚':
+            elif char in "└╰╚":
                 if j + 1 < len(line):
                     next_char = line[j + 1]
-                    if next_char not in BOX_CHARS['horizontal'] + BOX_CHARS['junctions'] + BOX_CHARS['corners'] + ' ':
-                        issues.append(f"Line {line_num}, col {j}: '{char}' not connected properly")
+                    if (
+                        next_char
+                        not in BOX_CHARS["horizontal"]
+                        + BOX_CHARS["junctions"]
+                        + BOX_CHARS["corners"]
+                        + " "
+                    ):
+                        issues.append(
+                            f"Line {line_num}, col {j}: '{char}' not connected properly"
+                        )
 
-            elif char in '┘╯╝':
+            elif char in "┘╯╝":
                 if j > 0:
                     prev_char = line[j - 1]
-                    if prev_char not in BOX_CHARS['horizontal'] + BOX_CHARS['junctions'] + BOX_CHARS['corners'] + ' ':
-                        issues.append(f"Line {line_num}, col {j}: '{char}' not connected properly")
+                    if (
+                        prev_char
+                        not in BOX_CHARS["horizontal"]
+                        + BOX_CHARS["junctions"]
+                        + BOX_CHARS["corners"]
+                        + " "
+                    ):
+                        issues.append(
+                            f"Line {line_num}, col {j}: '{char}' not connected properly"
+                        )
 
     return {
-        'valid': len(issues) == 0,
-        'issues': issues[:10],  # Limit to first 10
-        'box_lines_found': len(box_lines),
+        "valid": len(issues) == 0,
+        "issues": issues[:10],  # Limit to first 10
+        "box_lines_found": len(box_lines),
     }
 
 
@@ -215,9 +255,9 @@ async def verify_modal_boundaries(session) -> dict:
     for i in range(screen.number_of_lines):
         line = screen.line(i).string
         for j, char in enumerate(line):
-            if char in '┌╭╔':
+            if char in "┌╭╔":
                 top_corners.append((i, j, char))
-            elif char in '└╰╚':
+            elif char in "└╰╚":
                 bottom_corners.append((i, j, char))
 
     # Check for matching corners
@@ -232,7 +272,9 @@ async def verify_modal_boundaries(session) -> dict:
             bottom_line, bottom_col, _ = bottom_corners[-1]
 
             if top_col != bottom_col:
-                issues.append(f"Modal corners misaligned: top at col {top_col}, bottom at col {bottom_col}")
+                issues.append(
+                    f"Modal corners misaligned: top at col {top_col}, bottom at col {bottom_col}"
+                )
 
             # Check modal height is reasonable
             height = bottom_line - top_line
@@ -240,10 +282,10 @@ async def verify_modal_boundaries(session) -> dict:
                 issues.append(f"Modal too short: only {height} lines")
 
     return {
-        'valid': len(issues) == 0,
-        'issues': issues,
-        'top_corners': len(top_corners),
-        'bottom_corners': len(bottom_corners),
+        "valid": len(issues) == 0,
+        "issues": issues,
+        "top_corners": len(top_corners),
+        "bottom_corners": len(bottom_corners),
     }
 
 
@@ -274,17 +316,17 @@ async def verify_status_bar(session, position: str = "bottom") -> dict:
     # Handle empty screen
     if status_line is None:
         return {
-            'valid': False,
-            'issues': ["No status bar found - screen is empty or TUI not rendered"],
-            'line': -1,
-            'content_length': 0,
+            "valid": False,
+            "issues": ["No status bar found - screen is empty or TUI not rendered"],
+            "line": -1,
+            "content_length": 0,
         }
 
     # Check for large gaps (more than 10 consecutive spaces in middle)
     in_content = False
     space_run = 0
     for char in status_line:
-        if char != ' ':
+        if char != " ":
             in_content = True
             if space_run > 10 and in_content:
                 issues.append(f"Large gap ({space_run} spaces) in status bar")
@@ -298,10 +340,10 @@ async def verify_status_bar(session, position: str = "bottom") -> dict:
         issues.append(f"Status bar too short: only {content_len} chars of content")
 
     return {
-        'valid': len(issues) == 0,
-        'issues': issues,
-        'line': status_line_num,
-        'content_length': content_len,
+        "valid": len(issues) == 0,
+        "issues": issues,
+        "line": status_line_num,
+        "content_length": content_len,
     }
 
 
@@ -318,16 +360,18 @@ async def verify_column_alignment(session, header_line: int = 0) -> dict:
     start = 0
 
     for i, char in enumerate(header):
-        if char != ' ' and not in_content:
+        if char != " " and not in_content:
             in_content = True
             start = i
-        elif char == ' ' and in_content:
+        elif char == " " and in_content:
             in_content = False
             content_positions.append((start, i))
 
     # Check a few data lines
     misalignments = 0
-    for line_num in range(header_line + 1, min(header_line + 6, screen.number_of_lines)):
+    for line_num in range(
+        header_line + 1, min(header_line + 6, screen.number_of_lines)
+    ):
         data_line = screen.line(line_num).string
         if not data_line.strip():
             continue
@@ -336,10 +380,10 @@ async def verify_column_alignment(session, header_line: int = 0) -> dict:
         data_starts = []
         in_content = False
         for i, char in enumerate(data_line):
-            if char != ' ' and not in_content:
+            if char != " " and not in_content:
                 in_content = True
                 data_starts.append(i)
-            elif char == ' ':
+            elif char == " ":
                 in_content = False
 
         # Compare first few column starts
@@ -353,22 +397,29 @@ async def verify_column_alignment(session, header_line: int = 0) -> dict:
         issues.append(f"Multiple column misalignments detected ({misalignments})")
 
     return {
-        'valid': len(issues) == 0,
-        'issues': issues,
-        'header_columns': len(content_positions),
+        "valid": len(issues) == 0,
+        "issues": issues,
+        "header_columns": len(content_positions),
     }
 
 
 async def dump_layout_debug(session, label: str):
     """Dump screen with box characters highlighted for debugging."""
     screen = await session.async_get_screen_contents()
-    all_box = (BOX_CHARS['corners'] + BOX_CHARS['horizontal'] +
-               BOX_CHARS['vertical'] + BOX_CHARS['junctions'])
+    all_box = (
+        BOX_CHARS["corners"]
+        + BOX_CHARS["horizontal"]
+        + BOX_CHARS["vertical"]
+        + BOX_CHARS["junctions"]
+    )
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"LAYOUT DEBUG: {label}")
-    print(f"{'='*70}")
-    print("     " + "0         1         2         3         4         5         6         7")
+    print(f"{'=' * 70}")
+    print(
+        "     "
+        + "0         1         2         3         4         5         6         7"
+    )
     print("     " + "0123456789" * 7)
     print()
 
@@ -384,12 +435,13 @@ async def dump_layout_debug(session, label: str):
                     marked += c
             print(f"{i:03d}: {line[:70]}")
 
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
 
 # ============================================================
 # CLEANUP
 # ============================================================
+
 
 async def cleanup_session(session, quit_key: str = "q"):
     """Multi-level cleanup."""
@@ -409,16 +461,24 @@ async def cleanup_session(session, quit_key: str = "q"):
 # MAIN TEST
 # ============================================================
 
+
 async def main(connection):
+    # Create own window (parallel-safe, with app-refresh)
+    window = await iterm2.Window.async_create(connection)
+    await asyncio.sleep(0.5)
     app = await iterm2.async_get_app(connection)
-    window = app.current_terminal_window
+    if window.current_tab is None:
+        for w in app.terminal_windows:
+            if w.window_id == window.window_id:
+                window = w
+                break
+    for _ in range(20):
+        if window.current_tab and window.current_tab.current_session:
+            break
+        await asyncio.sleep(0.2)
 
-    if not window:
-        print("ERROR: No active window")
-        return 1
-
-    tab = await window.async_create_tab()
-    session = tab.current_session
+    session = window.current_tab.current_session
+    await session.async_set_name("layout-verification")
 
     print("\n" + "#" * 60)
     print("# TUI LAYOUT VERIFICATION TEST")
@@ -442,11 +502,14 @@ async def main(connection):
 
         box_result = await verify_box_integrity(session, "main UI boxes")
 
-        if box_result['valid']:
+        if box_result["valid"]:
             log_result("Box Integrity", "PASS")
         else:
-            log_result("Box Integrity", "FAIL",
-                      f"{len(box_result['issues'])} issues: {box_result['issues'][0] if box_result['issues'] else 'unknown'}")
+            log_result(
+                "Box Integrity",
+                "FAIL",
+                f"{len(box_result['issues'])} issues: {box_result['issues'][0] if box_result['issues'] else 'unknown'}",
+            )
             capture_screenshot("box_integrity_fail")
 
         print(f"  Found {box_result['box_lines_found']} lines with box-drawing chars")
@@ -460,14 +523,21 @@ async def main(connection):
 
         status_result = await verify_status_bar(session, "bottom")
 
-        if status_result['valid']:
+        if status_result["valid"]:
             log_result("Status Bar", "PASS")
         else:
-            log_result("Status Bar", "FAIL",
-                      status_result['issues'][0] if status_result['issues'] else "unknown issue")
+            log_result(
+                "Status Bar",
+                "FAIL",
+                status_result["issues"][0]
+                if status_result["issues"]
+                else "unknown issue",
+            )
 
-        print(f"  Status bar at line {status_result.get('line', 'N/A')}, "
-              f"content length: {status_result.get('content_length', 'N/A')}")
+        print(
+            f"  Status bar at line {status_result.get('line', 'N/A')}, "
+            f"content length: {status_result.get('content_length', 'N/A')}"
+        )
 
         # ============================================================
         # TEST 3: Column Alignment
@@ -479,11 +549,14 @@ async def main(connection):
         # htop header is typically at line 0-2 depending on meters
         col_result = await verify_column_alignment(session, header_line=1)
 
-        if col_result['valid']:
+        if col_result["valid"]:
             log_result("Column Alignment", "PASS")
         else:
-            log_result("Column Alignment", "FAIL",
-                      col_result['issues'][0] if col_result['issues'] else "unknown")
+            log_result(
+                "Column Alignment",
+                "FAIL",
+                col_result["issues"][0] if col_result["issues"] else "unknown",
+            )
 
         print(f"  Detected {col_result['header_columns']} column boundaries")
 
@@ -500,17 +573,22 @@ async def main(connection):
 
         modal_result = await verify_modal_boundaries(session)
 
-        if modal_result['valid']:
+        if modal_result["valid"]:
             log_result("Modal Boundaries", "PASS")
             capture_screenshot("modal_ok")
         else:
-            log_result("Modal Boundaries", "FAIL",
-                      modal_result['issues'][0] if modal_result['issues'] else "unknown")
+            log_result(
+                "Modal Boundaries",
+                "FAIL",
+                modal_result["issues"][0] if modal_result["issues"] else "unknown",
+            )
             capture_screenshot("modal_fail")
             await dump_layout_debug(session, "modal_failure")
 
-        print(f"  Found {modal_result['top_corners']} top corners, "
-              f"{modal_result['bottom_corners']} bottom corners")
+        print(
+            f"  Found {modal_result['top_corners']} top corners, "
+            f"{modal_result['bottom_corners']} bottom corners"
+        )
 
         # Close help
         await session.async_send_text("q")
@@ -534,4 +612,4 @@ async def main(connection):
 
 if __name__ == "__main__":
     exit_code = iterm2.run_until_complete(main)
-    exit(exit_code if exit_code else 0)
+    sys.exit(exit_code or 0)

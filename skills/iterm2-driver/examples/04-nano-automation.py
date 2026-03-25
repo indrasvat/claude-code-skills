@@ -11,7 +11,8 @@ Example 4: Advanced - TUI Automation (Nano Editor)
 
 This script demonstrates how to drive a full-screen terminal application (Nano).
 It launches the editor, types text, and handles the save-and-quit keystroke sequence
-(`Ctrl+X`, `y`, `Enter`).
+(`Ctrl+X`, `y`, `Enter`). Uses safe window creation (never current_terminal_window)
+with readiness probes.
 
 Tests:
     1. Launch Nano: Verify Nano editor starts and shows interface
@@ -19,6 +20,7 @@ Tests:
     3. Save and Quit: Execute Ctrl+X, y, Enter sequence to save
 
 Verification Strategy:
+    - Create own window (parallel-safe)
     - Look for "GNU nano" in header or "New Buffer" to confirm launch
     - After save sequence, verify return to shell prompt
     - Optionally verify file contents with cat command
@@ -39,13 +41,16 @@ Usage:
     uv run 04-nano-automation.py
 """
 
-import iterm2
 import asyncio
 import os
+import sys
+
+import iterm2
 
 # ============================================================
 # CLEANUP HELPER
 # ============================================================
+
 
 async def cleanup_session(session):
     """Perform multi-level cleanup on a session."""
@@ -72,20 +77,40 @@ async def cleanup_session(session):
         print(f"  Cleanup warning: {e}")
 
 
+async def dump_screen(session, label: str):
+    """Dump screen contents for debugging."""
+    screen = await session.async_get_screen_contents()
+    print(f"\n--- SCREEN DUMP: {label} ---")
+    for i in range(screen.number_of_lines):
+        line = screen.line(i).string
+        if line.strip():
+            print(f"{i:03d}: {line}")
+    print("---")
+
+
 # ============================================================
 # MAIN
 # ============================================================
 
+
 async def main(connection):
+    # Create own window (parallel-safe, never use current_terminal_window)
+    window = await iterm2.Window.async_create(connection)
+    await asyncio.sleep(0.5)
     app = await iterm2.async_get_app(connection)
-    window = app.current_terminal_window
+    if window.current_tab is None:
+        for w in app.terminal_windows:
+            if w.window_id == window.window_id:
+                window = w
+                break
+    for _ in range(20):
+        if window.current_tab and window.current_tab.current_session:
+            break
+        await asyncio.sleep(0.2)
 
-    if window is None:
-        print("ERROR: No active window found")
-        return 1
-
-    tab = await window.async_create_tab()
-    session = tab.current_session
+    session = window.current_tab.current_session
+    await session.async_set_name("nano-automation")
+    created_sessions = [session]
 
     # Use a temp file that won't conflict with anything
     filepath = "/tmp/iterm2_nano_test.txt"
@@ -113,6 +138,7 @@ async def main(connection):
             print("   Nano launched successfully")
         else:
             print("   WARNING: Could not verify Nano launch")
+            await dump_screen(session, "nano_launch_check")
             # Continue anyway - it might still work
 
         # ============================================================
@@ -165,7 +191,7 @@ async def main(connection):
                 print(f"   File created: {filepath}")
 
                 # Show file contents
-                with open(filepath, 'r') as f:
+                with open(filepath) as f:
                     contents = f.read()
                 print(f"   File contents:\n{contents}")
 
@@ -174,23 +200,27 @@ async def main(connection):
                 print("   Temp file cleaned up")
                 print("\n--- TEST PASSED ---")
                 return 0
-            else:
-                print(f"   WARNING: File not found at {filepath}")
-                print("\n--- TEST PASSED (with warning) ---")
-                return 0
-        else:
-            print("   WARNING: May still be in Nano")
-            print("\n--- TEST INCOMPLETE ---")
-            return 1
+            print(f"   WARNING: File not found at {filepath}")
+            print("\n--- TEST PASSED (with warning) ---")
+            return 0
+        print("   WARNING: May still be in Nano")
+        await dump_screen(session, "nano_exit_check")
+        print("\n--- TEST INCOMPLETE ---")
+        return 1
 
     except Exception as e:
         print(f"\nERROR: {e}")
+        try:
+            await dump_screen(session, "error_state")
+        except Exception:
+            pass
         raise
 
     finally:
-        await cleanup_session(session)
+        for s in created_sessions:
+            await cleanup_session(s)
 
 
 if __name__ == "__main__":
     exit_code = iterm2.run_until_complete(main)
-    exit(exit_code if exit_code else 0)
+    sys.exit(exit_code or 0)

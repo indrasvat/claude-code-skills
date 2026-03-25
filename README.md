@@ -52,15 +52,18 @@ Generate comprehensive Product Requirements Documents with interactive discovery
 [View Templates →](skills/prd-generator/templates/)
 
 #### 🖥️ **iterm2-driver**
-Drive iTerm2 programmatically using Python scripts to automate terminal tasks, run tests, or manage sessions.
+Drive iTerm2 programmatically using Python scripts to automate terminal tasks, run visual tests, or manage sessions. Includes parallel agent support for concurrent testing.
 
 **Capabilities:**
-- Create and orchestrate complex terminal layouts
-- Drive interactive TUIs (vim, nano, htop, etc.)
+- Create and orchestrate complex terminal layouts (splits, tabs, windows)
+- Drive interactive TUIs (vim, nano, htop, BubbleTea, etc.)
+- Run multiple agents concurrently with independent windows and screenshots
 - Automate REPL interactions (Python, Node, etc.)
-- Monitor screen output in real-time
-- Manage sessions and environment variables
-- Visual status indicators with badges
+- Monitor screen output in real-time with ScreenStreamer
+- Connection diagnostics for troubleshooting silent failures
+- Visual regression testing for CLI/TUI applications (L4 testing)
+
+**Platform:** macOS only (see [cloud limitations](skills/iterm2-driver/references/cloud-and-limitations.md))
 
 [View Examples →](skills/iterm2-driver/examples/)
 

@@ -10,23 +10,26 @@
 """
 Comprehensive Template: Canonical example demonstrating ALL iTerm2 automation patterns
 
-This template demonstrates the complete set of best practices for iTerm2 TUI automation:
-- Comprehensive docstring with all required sections
-- Quartz-based window targeting for precise screenshots
-- Multi-level try-except-finally cleanup
-- Screenshot capture and verification
-- Result tracking and reporting
+This is the copy-paste starting point for new automation scripts. It demonstrates:
+- Safe window creation with readiness probes (never uses current_terminal_window)
+- Position-based Quartz screenshot targeting (works without focus)
+- Multi-level try-except-finally cleanup with resource tracking
+- Result tracking with pass/fail/unverified and summary report
+- Screen verification with timeout-based polling
+- Connection diagnostics on failure
 
 Tests:
-    1. Launch Test: Verify the shell is accessible and responsive
-    2. Command Test: Run a command and verify output
-    3. Cleanup Test: Verify session closes cleanly
+    1. Shell Ready: Verify the shell is accessible and responsive
+    2. Command Execution: Run a command and verify output via unique marker
+    3. Multiple Commands: Run sequential commands and verify output
+    4. Final State: Capture final screenshot
 
 Verification Strategy:
-    - Use screen polling with 5-second timeout for each state transition
-    - Look for shell prompt characters ($ or %) to confirm shell is ready
-    - Verify command output by searching for expected text
-    - Confirm cleanup by checking session closure completes without error
+    - Create a dedicated window (not current_terminal_window) for isolation
+    - Use readiness probes to confirm window/tab/session initialization
+    - Use unique timestamp-based markers for output verification
+    - Poll screen with 5-second timeout for each state transition
+    - Dump full screen contents on any failure for debugging
 
 Screenshots:
     - template_shell_ready.png: Shell prompt visible and ready
@@ -54,6 +57,7 @@ import iterm2
 import asyncio
 import subprocess
 import os
+import time
 from datetime import datetime
 
 # ============================================================
@@ -62,7 +66,6 @@ from datetime import datetime
 
 SCREENSHOT_DIR = "./screenshots"
 TIMEOUT_SECONDS = 5.0
-
 
 # ============================================================
 # RESULT TRACKING
@@ -80,34 +83,21 @@ results = {
 
 
 def log_result(test_name: str, status: str, details: str = "", screenshot: str = None):
-    """Log a test result with optional details and screenshot reference.
-
-    Args:
-        test_name: Name of the test
-        status: "PASS", "FAIL", or "UNVERIFIED"
-        details: Additional details about the result
-        screenshot: Path to related screenshot if any
-    """
+    """Log a test result."""
     results["tests"].append({
         "name": test_name,
         "status": status,
         "details": details,
         "screenshot": screenshot,
     })
-
     if screenshot:
         results["screenshots"].append(screenshot)
 
-    if status == "PASS":
-        results["passed"] += 1
-        print(f"  [+] PASS: {test_name}")
-    elif status == "FAIL":
-        results["failed"] += 1
-        print(f"  [x] FAIL: {test_name} - {details}")
-    else:
-        results["unverified"] += 1
-        print(f"  [?] UNVERIFIED: {test_name} - {details}")
-
+    symbol = {"PASS": "+", "FAIL": "x", "UNVERIFIED": "?"}.get(status, "?")
+    results[{"PASS": "passed", "FAIL": "failed"}.get(status, "unverified")] += 1
+    print(f"  [{symbol}] {status}: {test_name}")
+    if details:
+        print(f"      {details}")
     if screenshot:
         print(f"      Screenshot: {screenshot}")
 
@@ -116,9 +106,13 @@ def print_summary() -> int:
     """Print final test summary and return exit code."""
     results["end_time"] = datetime.now()
     total = results["passed"] + results["failed"] + results["unverified"]
-    duration = (results["end_time"] - results["start_time"]).total_seconds() if results["start_time"] else 0
+    duration = (
+        (results["end_time"] - results["start_time"]).total_seconds()
+        if results["start_time"]
+        else 0
+    )
 
-    print("\n" + "=" * 60)
+    print(f"\n{'=' * 60}")
     print("TEST SUMMARY")
     print("=" * 60)
     print(f"Duration:   {duration:.1f}s")
@@ -126,88 +120,77 @@ def print_summary() -> int:
     print(f"Passed:     {results['passed']}")
     print(f"Failed:     {results['failed']}")
     print(f"Unverified: {results['unverified']}")
-
     if results["screenshots"]:
         print(f"Screenshots: {len(results['screenshots'])}")
-
     print("=" * 60)
 
     if results["failed"] > 0:
         print("\nFailed tests:")
-        for test in results["tests"]:
-            if test["status"] == "FAIL":
-                print(f"  - {test['name']}: {test['details']}")
-
-    print("\n" + "-" * 60)
-    if results["failed"] > 0:
-        print("OVERALL: FAILED")
+        for t in results["tests"]:
+            if t["status"] == "FAIL":
+                print(f"  - {t['name']}: {t['details']}")
+        print("\nOVERALL: FAILED")
         return 1
-    elif results["unverified"] > 0:
-        print("OVERALL: PASSED (with unverified tests)")
-        return 0
-    else:
-        print("OVERALL: PASSED")
-        return 0
+    print("\nOVERALL: PASSED")
+    return 0
 
 
 def print_test_header(test_name: str, test_num: int = None):
-    """Print a visual header for a test section."""
-    if test_num:
-        header = f"TEST {test_num}: {test_name}"
-    else:
-        header = f"TEST: {test_name}"
-    print("\n" + "=" * 60)
+    header = f"TEST {test_num}: {test_name}" if test_num else f"TEST: {test_name}"
+    print(f"\n{'=' * 60}")
     print(header)
     print("=" * 60)
 
 
 # ============================================================
-# QUARTZ WINDOW TARGETING
+# QUARTZ WINDOW TARGETING (position-based, parallel-safe)
 # ============================================================
 
 try:
     import Quartz
 
-    def get_iterm2_window_id():
-        """Get the window ID of the frontmost iTerm2 window for targeted screenshots."""
+    def find_quartz_window_id(target_x, target_w, target_h, tolerance=30):
+        """Find Quartz CGWindowNumber by matching iTerm2 window frame geometry."""
         window_list = Quartz.CGWindowListCopyWindowInfo(
-            Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
-            Quartz.kCGNullWindowID
+            Quartz.kCGWindowListOptionOnScreenOnly
+            | Quartz.kCGWindowListExcludeDesktopElements,
+            Quartz.kCGNullWindowID,
         )
-        for window in window_list:
-            owner = window.get('kCGWindowOwnerName', '')
-            if 'iTerm' in owner:
-                return window.get('kCGWindowNumber')
-        return None
+        best_id, best_score = None, float("inf")
+        for w in window_list:
+            if "iTerm" not in w.get("kCGWindowOwnerName", ""):
+                continue
+            b = w.get("kCGWindowBounds", {})
+            score = (
+                abs(float(b.get("X", 0)) - target_x) * 2
+                + abs(float(b.get("Width", 0)) - target_w)
+                + abs(float(b.get("Height", 0)) - target_h)
+            )
+            if score < best_score:
+                best_score, best_id = score, w.get("kCGWindowNumber")
+        return best_id if best_score < tolerance else None
 
 except ImportError:
     print("WARNING: Quartz not available, screenshots will capture full screen")
 
-    def get_iterm2_window_id():
+    def find_quartz_window_id(target_x, target_w, target_h, tolerance=30):
         return None
 
 
-def capture_screenshot(name: str) -> str:
-    """Capture a screenshot of just the iTerm2 window.
-
-    Args:
-        name: Descriptive name for the screenshot (without extension)
-
-    Returns:
-        Path to the saved screenshot
-    """
+async def capture_screenshot(window, name: str) -> str:
+    """Capture a screenshot of a specific iTerm2 window (no focus required)."""
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{name}_{timestamp}.png"
     filepath = os.path.join(SCREENSHOT_DIR, filename)
 
-    window_id = get_iterm2_window_id()
-    if window_id:
-        # -x: no sound, -l: specific window ID
-        subprocess.run(["screencapture", "-x", "-l", str(window_id), filepath], check=True)
+    frame = await window.async_get_frame()
+    qid = find_quartz_window_id(frame.origin.x, frame.size.width, frame.size.height)
+
+    if qid:
+        subprocess.run(["screencapture", "-x", "-l", str(qid), filepath], check=True)
     else:
-        # Fallback to full screen if window not found
-        print("  WARNING: iTerm2 window not found, capturing full screen")
+        print("  WARNING: Quartz window not found, capturing full screen")
         subprocess.run(["screencapture", "-x", filepath], check=True)
 
     print(f"  SCREENSHOT: {filepath}")
@@ -219,17 +202,7 @@ def capture_screenshot(name: str) -> str:
 # ============================================================
 
 async def verify_screen_contains(session, expected: str, description: str) -> bool:
-    """Verify that expected text appears on screen within timeout.
-
-    Args:
-        session: iTerm2 session
-        expected: Text to look for
-        description: Human-readable description for logging
-
-    Returns:
-        True if found, False otherwise
-    """
-    import time
+    """Wait for expected text to appear on screen within timeout."""
     start = time.monotonic()
     while (time.monotonic() - start) < TIMEOUT_SECONDS:
         screen = await session.async_get_screen_contents()
@@ -238,37 +211,94 @@ async def verify_screen_contains(session, expected: str, description: str) -> bo
                 print(f"  Found: '{expected}' ({description})")
                 return True
         await asyncio.sleep(0.2)
-
     print(f"  Not found: '{expected}' after {TIMEOUT_SECONDS}s ({description})")
     return False
 
 
 async def verify_shell_prompt(session) -> bool:
-    """Verify that a shell prompt is visible ($ or %)."""
+    """Verify that a shell prompt is visible.
+
+    Handles traditional ($, %, >) and modern prompts (Starship, Powerlevel10k)
+    by checking for username, ~, or any non-empty content after login.
+    """
     screen = await session.async_get_screen_contents()
+    non_empty = 0
     for i in range(screen.number_of_lines):
-        line = screen.line(i).string
+        line = screen.line(i).string.strip()
+        if line:
+            non_empty += 1
+        # Traditional prompts
         if "$" in line or "%" in line or ">" in line:
             return True
-    return False
+        # Modern prompts (Starship, Powerlevel10k, Oh-My-Zsh)
+        if "~" in line or "❯" in line or "➜" in line or "λ" in line:
+            return True
+    # If we see at least 2 non-empty lines, the shell likely rendered
+    return non_empty >= 2
 
 
 async def dump_screen(session, label: str):
-    """Dump current screen contents for debugging.
-
-    Args:
-        session: iTerm2 session
-        label: Label for the dump (used in output)
-    """
+    """Dump current screen contents for debugging."""
     screen = await session.async_get_screen_contents()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"SCREEN DUMP: {label}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for i in range(screen.number_of_lines):
         line = screen.line(i).string
-        if line.strip():  # Only print non-empty lines
+        if line.strip():
             print(f"{i:03d}: {line}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
+
+
+# ============================================================
+# WINDOW CREATION WITH READINESS PROBES
+# ============================================================
+
+async def create_test_window(connection, name="test", x_pos=100):
+    """Create an isolated test window with full readiness verification.
+
+    Never uses app.current_terminal_window — always creates a new window.
+    """
+    window = await iterm2.Window.async_create(connection)
+    if window is None:
+        raise RuntimeError("Window.async_create() returned None")
+
+    await asyncio.sleep(0.5)  # Let iTerm2 fully initialize
+
+    # Refresh app state — returned window object can be stale
+    app = await iterm2.async_get_app(connection)
+    if window.current_tab is None:
+        for w in app.terminal_windows:
+            if w.window_id == window.window_id:
+                window = w
+                break
+
+    # Readiness probe: wait for tab and session
+    for _ in range(20):
+        if window.current_tab and window.current_tab.current_session:
+            break
+        await asyncio.sleep(0.2)
+
+    if not window.current_tab or not window.current_tab.current_session:
+        raise RuntimeError("Window tab/session not ready after timeout")
+
+    session = window.current_tab.current_session
+    await session.async_set_name(name)
+
+    # Position window (enables Quartz screenshot targeting)
+    frame = await window.async_get_frame()
+    await window.async_set_frame(iterm2.Frame(
+        iterm2.Point(x_pos, frame.origin.y),
+        iterm2.Size(frame.size.width, frame.size.height),
+    ))
+    await asyncio.sleep(0.3)
+
+    # Verify screen is readable
+    screen = await session.async_get_screen_contents()
+    if screen is None:
+        raise RuntimeError("Screen not readable after window creation")
+
+    return window, session
 
 
 # ============================================================
@@ -276,31 +306,18 @@ async def dump_screen(session, label: str):
 # ============================================================
 
 async def cleanup_session(session, quit_key: str = None):
-    """Perform multi-level cleanup on a session.
-
-    Args:
-        session: iTerm2 session to clean up
-        quit_key: Optional key to send for TUI quit (e.g., 'q' for htop)
-    """
+    """Perform multi-level cleanup on a session."""
     print("\n  Performing cleanup...")
     try:
-        # Level 1: Send Ctrl+C to interrupt any running process
-        await session.async_send_text("\x03")
-        await asyncio.sleep(0.2)
-
-        # Level 2: Send quit key if specified (for TUIs like htop, vim, etc.)
+        await session.async_send_text("\x03")  # Ctrl+C
+        await asyncio.sleep(0.1)
         if quit_key:
             await session.async_send_text(quit_key)
-            await asyncio.sleep(0.2)
-
-        # Level 3: Send exit command for shells/REPLs
+            await asyncio.sleep(0.1)
         await session.async_send_text("exit\n")
         await asyncio.sleep(0.2)
-
-        # Level 4: Close the session
         await session.async_close()
         print("  Cleanup complete")
-
     except Exception as e:
         print(f"  Cleanup warning: {e}")
 
@@ -317,22 +334,9 @@ async def main(connection):
     print("# COMPREHENSIVE TEMPLATE TEST")
     print("# Demonstrates all iTerm2 automation patterns")
     print("#" * 60)
-    print(f"# Started: {results['start_time'].strftime('%Y-%m-%d %H:%M:%S')}")
-    print("#" * 60)
 
-    app = await iterm2.async_get_app(connection)
-    window = app.current_terminal_window
-
-    if not window:
-        print("ERROR: No active window found")
-        log_result("Setup", "FAIL", "No active iTerm2 window")
-        return print_summary()
-
-    # Create a new tab for testing
-    tab = await window.async_create_tab()
-    session = tab.current_session
-
-    # Track created resources for cleanup
+    # Create isolated test window (NOT current_terminal_window)
+    window, session = await create_test_window(connection, "template-test")
     created_sessions = [session]
 
     try:
@@ -340,11 +344,10 @@ async def main(connection):
         # TEST 1: Shell Ready
         # ============================================================
         print_test_header("Shell Ready", 1)
-        print("  Waiting for shell prompt...")
         await asyncio.sleep(0.5)
 
         if await verify_shell_prompt(session):
-            screenshot = capture_screenshot("template_shell_ready")
+            screenshot = await capture_screenshot(window, "template_shell_ready")
             log_result("Shell Ready", "PASS", screenshot=screenshot)
         else:
             await dump_screen(session, "shell_not_ready")
@@ -354,54 +357,44 @@ async def main(connection):
         # TEST 2: Command Execution
         # ============================================================
         print_test_header("Command Execution", 2)
-        print("  Sending test command...")
 
-        # Use a unique marker for verification
         marker = f"TEMPLATE_TEST_{datetime.now().strftime('%H%M%S')}"
         await session.async_send_text(f"echo '{marker}'\n")
         await asyncio.sleep(0.5)
 
         if await verify_screen_contains(session, marker, "echo output"):
-            screenshot = capture_screenshot("template_command_output")
+            screenshot = await capture_screenshot(window, "template_command_output")
             log_result("Command Execution", "PASS", screenshot=screenshot)
         else:
             await dump_screen(session, "command_failed")
-            log_result("Command Execution", "FAIL", f"Marker '{marker}' not found in output")
+            log_result("Command Execution", "FAIL", f"Marker '{marker}' not found")
 
         # ============================================================
         # TEST 3: Multiple Commands
         # ============================================================
         print_test_header("Multiple Commands", 3)
-        print("  Testing pwd and ls commands...")
 
         await session.async_send_text("pwd\n")
         await asyncio.sleep(0.3)
         await session.async_send_text("ls -la | head -5\n")
         await asyncio.sleep(0.5)
 
-        # Verify we can see directory listing indicators
         screen = await session.async_get_screen_contents()
-        has_output = False
-        for i in range(screen.number_of_lines):
-            line = screen.line(i).string
-            # Look for typical ls output patterns
-            if "total" in line or "drwx" in line or "-rw" in line:
-                has_output = True
-                break
+        has_output = any(
+            "total" in screen.line(i).string or "drwx" in screen.line(i).string
+            for i in range(screen.number_of_lines)
+        )
 
         if has_output:
-            screenshot = capture_screenshot("template_multiple_commands")
-            log_result("Multiple Commands", "PASS", screenshot=screenshot)
+            log_result("Multiple Commands", "PASS")
         else:
-            log_result("Multiple Commands", "UNVERIFIED", "Could not verify ls output format")
+            log_result("Multiple Commands", "UNVERIFIED", "Could not verify ls output")
 
         # ============================================================
         # TEST 4: Final State
         # ============================================================
         print_test_header("Final State", 4)
-        print("  Capturing final state...")
-
-        screenshot = capture_screenshot("template_final")
+        screenshot = await capture_screenshot(window, "template_final")
         log_result("Final State", "PASS", "Final screenshot captured", screenshot=screenshot)
 
     except Exception as e:
@@ -410,22 +403,11 @@ async def main(connection):
         await dump_screen(session, "error_state")
 
     finally:
-        # ============================================================
-        # CLEANUP
-        # ============================================================
-        print("\n" + "=" * 60)
-        print("CLEANUP")
-        print("=" * 60)
-
         for s in created_sessions:
             await cleanup_session(s)
 
     return print_summary()
 
-
-# ============================================================
-# ENTRY POINT
-# ============================================================
 
 if __name__ == "__main__":
     exit_code = iterm2.run_until_complete(main)

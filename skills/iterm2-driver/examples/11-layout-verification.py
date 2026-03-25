@@ -410,15 +410,22 @@ async def cleanup_session(session, quit_key: str = "q"):
 # ============================================================
 
 async def main(connection):
+    # Create own window (parallel-safe, with app-refresh)
+    window = await iterm2.Window.async_create(connection)
+    await asyncio.sleep(0.5)
     app = await iterm2.async_get_app(connection)
-    window = app.current_terminal_window
+    if window.current_tab is None:
+        for w in app.terminal_windows:
+            if w.window_id == window.window_id:
+                window = w
+                break
+    for _ in range(20):
+        if window.current_tab and window.current_tab.current_session:
+            break
+        await asyncio.sleep(0.2)
 
-    if not window:
-        print("ERROR: No active window")
-        return 1
-
-    tab = await window.async_create_tab()
-    session = tab.current_session
+    session = window.current_tab.current_session
+    await session.async_set_name("layout-verification")
 
     print("\n" + "#" * 60)
     print("# TUI LAYOUT VERIFICATION TEST")

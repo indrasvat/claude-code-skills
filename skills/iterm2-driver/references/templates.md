@@ -231,15 +231,22 @@ async def cleanup_session(session, quit_key: str = "q"):
 # ============================================================
 
 async def main(connection):
+    # Create own window (never use app.current_terminal_window)
+    window = await iterm2.Window.async_create(connection)
+    await asyncio.sleep(0.5)
+    # Refresh — returned window object can be stale
     app = await iterm2.async_get_app(connection)
-    window = app.current_terminal_window
+    if window.current_tab is None:
+        for w in app.terminal_windows:
+            if w.window_id == window.window_id:
+                window = w
+                break
+    for _ in range(20):
+        if window.current_tab and window.current_tab.current_session:
+            break
+        await asyncio.sleep(0.2)
 
-    if not window:
-        print("ERROR: No active window found")
-        return 1
-
-    tab = await window.async_create_tab()
-    session = tab.current_session
+    session = window.current_tab.current_session
 
     try:
         # ============================================================
@@ -334,15 +341,21 @@ import asyncio
 
 
 async def main(connection):
+    # Create own window (never use app.current_terminal_window)
+    window = await iterm2.Window.async_create(connection)
+    await asyncio.sleep(0.5)
     app = await iterm2.async_get_app(connection)
-    window = app.current_terminal_window
+    if window.current_tab is None:
+        for w in app.terminal_windows:
+            if w.window_id == window.window_id:
+                window = w
+                break
+    for _ in range(20):
+        if window.current_tab and window.current_tab.current_session:
+            break
+        await asyncio.sleep(0.2)
 
-    if not window:
-        print("No active window found")
-        return
-
-    tab = await window.async_create_tab()
-    session = tab.current_session
+    session = window.current_tab.current_session
 
     try:
         # === AUTOMATION LOGIC ===
@@ -395,18 +408,22 @@ import asyncio
 
 
 async def main(connection):
+    # Create own window (never use app.current_terminal_window)
+    window = await iterm2.Window.async_create(connection)
+    await asyncio.sleep(0.5)
     app = await iterm2.async_get_app(connection)
-    window = app.current_terminal_window
+    if window.current_tab is None:
+        for w in app.terminal_windows:
+            if w.window_id == window.window_id:
+                window = w
+                break
+    for _ in range(20):
+        if window.current_tab and window.current_tab.current_session:
+            break
+        await asyncio.sleep(0.2)
 
-    if not window:
-        print("No active window found")
-        return
-
-    # Create a new tab for the layout
-    tab = await window.async_create_tab()
-
-    # Top Left
-    session_tl = tab.current_session
+    # Top Left (initial session from the new window)
+    session_tl = window.current_tab.current_session
     await session_tl.async_set_name("<Name>")
     await session_tl.async_send_text("<command>\n")
 

@@ -1,16 +1,22 @@
 ---
 name: iterm2-driver
-description: Drive iTerm2 programmatically using Python scripts to automate terminal tasks, run tests, or manage sessions. Use when the user needs to test TUIs, CLIs, terminal apps, terminal automation, interactive terminal testing, terminal UI, command-line interface automation, REPL automation, screen monitoring, or terminal screenshots. Supports iTerm2 and iterm automation.
+description: Drive iTerm2 programmatically using Python scripts to automate terminal tasks, run visual tests, or manage sessions. Use when the user needs to test TUIs, CLIs, terminal apps, do terminal automation, interactive terminal testing, visual regression testing, L4 visual tests, terminal UI verification, command-line interface automation, REPL automation, screen monitoring, terminal screenshots, screenshot capture, parallel agent testing, window management, pane layouts, or iTerm2 automation. Supports iTerm2, iterm, and multi-agent parallel terminal testing.
 metadata:
   filePattern:
     - "**/.claude/automations/*.py"
+    - "**/.agent/automations/*.py"
     - "**/iterm2*.py"
     - "**/iterm*.py"
     - "**/terminal_test*.py"
+    - "**/visual_test*.py"
+    - "**/test_visual*.py"
   bashPattern:
     - "uv run.*iterm"
+    - "uv run.*visual"
+    - "uv run.*terminal"
     - "iterm2"
     - "screencapture.*-l"
+    - "make test-visual"
 ---
 
 # iTerm2 Driver Skill

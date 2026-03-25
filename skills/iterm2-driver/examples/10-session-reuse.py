@@ -70,15 +70,27 @@ async def main(connection):
         if target_session:
             break
 
-    # 2. Create if not found — use safe window creation
+    # 2. Create if not found — use safe window creation with app-refresh
     if not target_session:
         window = await iterm2.Window.async_create(connection)
+        await asyncio.sleep(0.5)
 
-        # Readiness probe
+        # Refresh — returned window object can be stale
+        app = await iterm2.async_get_app(connection)
+        if window.current_tab is None:
+            for w in app.terminal_windows:
+                if w.window_id == window.window_id:
+                    window = w
+                    break
+
         for _ in range(20):
-            if window and window.current_tab and window.current_tab.current_session:
+            if window.current_tab and window.current_tab.current_session:
                 break
             await asyncio.sleep(0.2)
+
+        if not window.current_tab or not window.current_tab.current_session:
+            print("ERROR: Window not ready after refresh")
+            return
 
         target_session = window.current_tab.current_session
         await target_session.async_set_name(target_name)
@@ -102,8 +114,13 @@ async def main(connection):
             pass
 
     finally:
+        # NOTE: We intentionally do NOT close the reusable session here.
+        # The whole point of this example is that the session persists
+        # across runs so it can be reused next time.
+        # Only close sessions that were NOT the reusable target.
         for s in created_sessions:
-            await cleanup_session(s)
+            if s.name != target_name:
+                await cleanup_session(s)
 
 
 if __name__ == "__main__":

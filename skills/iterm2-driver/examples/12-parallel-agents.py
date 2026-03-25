@@ -259,6 +259,12 @@ async def main(connection):
     # Startup janitor — clean up orphans from previous crashed runs
     await cleanup_stale_windows(connection)
 
+    # Clear stale screenshots from previous runs to avoid false positives
+    if os.path.exists(SCREENSHOT_DIR):
+        for f in os.listdir(SCREENSHOT_DIR):
+            if f.startswith("parallel_"):
+                os.unlink(os.path.join(SCREENSHOT_DIR, f))
+
     agents = []
     agent_fns = [agent_1_git, agent_2_sysinfo, agent_3_files]
     x_positions = [50, 350, 650]
@@ -286,7 +292,10 @@ async def main(connection):
         print("=" * 60)
 
         agent_results = await asyncio.gather(
-            *[fn(sess, win) for fn, (_, win, sess) in zip(agent_fns, agents, strict=False)]
+            *[
+                fn(sess, win)
+                for fn, (_, win, sess) in zip(agent_fns, agents, strict=False)
+            ]
         )
         all_found = all(found for found, _ in agent_results)
         if all_found:

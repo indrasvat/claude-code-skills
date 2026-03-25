@@ -194,18 +194,27 @@ def main_async_wrapper():
         test_window = None
         try:
             test_window = await iterm2.Window.async_create(connection)
-            # Readiness probe
+            await asyncio.sleep(0.5)
+
+            # Refresh — returned window object can be stale
+            app = await iterm2.async_get_app(connection)
+            if test_window.current_tab is None:
+                for w in app.terminal_windows:
+                    if w.window_id == test_window.window_id:
+                        test_window = w
+                        break
+
             for _ in range(20):
-                if test_window and test_window.current_tab and test_window.current_tab.current_session:
+                if test_window.current_tab and test_window.current_tab.current_session:
                     break
                 await asyncio.sleep(0.2)
 
-            if test_window and test_window.current_tab:
+            if test_window.current_tab and test_window.current_tab.current_session:
                 test_session = test_window.current_tab.current_session
                 await test_session.async_set_name("diagnostics-test")
                 log_result("Session Creation", "PASS", f"Session: {test_session.session_id}")
             else:
-                log_result("Session Creation", "FAIL", "Window created but tab/session not ready")
+                log_result("Session Creation", "FAIL", "Window created but tab/session not ready after refresh")
         except Exception as e:
             log_result("Session Creation", "FAIL", str(e))
 
@@ -246,27 +255,37 @@ def main_async_wrapper():
         try:
             import Quartz
             frame = await test_window.async_get_frame()
+            # Use position-based matching (same pattern as SKILL.md)
             window_list = Quartz.CGWindowListCopyWindowInfo(
                 Quartz.kCGWindowListOptionOnScreenOnly
                 | Quartz.kCGWindowListExcludeDesktopElements,
                 Quartz.kCGNullWindowID,
             )
-            iterm_windows = [
-                w for w in window_list
-                if "iTerm" in w.get("kCGWindowOwnerName", "")
-            ]
-            if iterm_windows:
-                qid = iterm_windows[0].get("kCGWindowNumber")
+            best_id, best_score = None, float("inf")
+            for w in window_list:
+                if "iTerm" not in w.get("kCGWindowOwnerName", ""):
+                    continue
+                b = w.get("kCGWindowBounds", {})
+                score = (
+                    abs(float(b.get("X", 0)) - frame.origin.x) * 2
+                    + abs(float(b.get("Width", 0)) - frame.size.width)
+                    + abs(float(b.get("Height", 0)) - frame.size.height)
+                )
+                if score < best_score:
+                    best_score, best_id = score, w.get("kCGWindowNumber")
+
+            if best_id and best_score < 30:
                 path = "/tmp/iterm2_diag_screenshot.png"
-                subprocess.run(["screencapture", "-x", "-l", str(qid), path], check=True)
+                subprocess.run(["screencapture", "-x", "-l", str(best_id), path], check=True)
                 if os.path.exists(path) and os.path.getsize(path) > 1000:
-                    log_result("Screenshot", "PASS", f"{os.path.getsize(path)} bytes")
+                    log_result("Screenshot", "PASS",
+                               f"{os.path.getsize(path)} bytes (Quartz ID={best_id})")
                     os.unlink(path)
                 else:
                     log_result("Screenshot", "FAIL", "File too small or missing")
             else:
                 log_result("Screenshot", "FAIL",
-                           "No iTerm2 windows in Quartz",
+                           "No matching iTerm2 window in Quartz",
                            "Ensure iTerm2 is not minimized and Screen Recording permission is granted")
         except ImportError:
             log_result("Screenshot", "FAIL",

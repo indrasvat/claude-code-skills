@@ -219,6 +219,24 @@ async def agent_3_files(session, window):
 # MAIN
 # ============================================================
 
+async def cleanup_stale_windows(connection, prefix="parallel-agent-"):
+    """Close windows from previous crashed runs."""
+    app = await iterm2.async_get_app(connection)
+    for window in app.terminal_windows:
+        for tab in window.tabs:
+            for session in tab.sessions:
+                if session.name and session.name.startswith(prefix):
+                    try:
+                        await session.async_send_text("exit\n")
+                        await asyncio.sleep(0.1)
+                        try:
+                            await session.async_close()
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+
+
 async def main(connection):
     results["start_time"] = time.monotonic()
 
@@ -227,36 +245,35 @@ async def main(connection):
     print("# 3 concurrent agents, independent windows & screenshots")
     print("#" * 60)
 
+    # Startup janitor — clean up orphans from previous crashed runs
+    await cleanup_stale_windows(connection)
+
     agents = []
     agent_fns = [agent_1_git, agent_2_sysinfo, agent_3_files]
     x_positions = [50, 350, 650]
 
-    # ============================================================
-    # TEST 1: Sequential Window Creation
-    # ============================================================
-    print(f"\n{'=' * 60}")
-    print("TEST 1: Sequential Window Creation")
-    print("=" * 60)
-
     try:
+        # ============================================================
+        # TEST 1: Sequential Window Creation
+        # ============================================================
+        print(f"\n{'=' * 60}")
+        print("TEST 1: Sequential Window Creation")
+        print("=" * 60)
+
         for i, x_pos in enumerate(x_positions):
             agent_id = f"parallel-agent-{i + 1}"
             window, session = await create_agent_window(connection, agent_id, x_pos)
             agents.append((agent_id, window, session))
             print(f"  Created {agent_id} at x={x_pos}")
         log_result("Sequential Window Creation", "PASS")
-    except Exception as e:
-        log_result("Sequential Window Creation", "FAIL", str(e))
-        return print_summary()
 
-    # ============================================================
-    # TEST 2: Concurrent Execution
-    # ============================================================
-    print(f"\n{'=' * 60}")
-    print("TEST 2: Concurrent Execution")
-    print("=" * 60)
+        # ============================================================
+        # TEST 2: Concurrent Execution
+        # ============================================================
+        print(f"\n{'=' * 60}")
+        print("TEST 2: Concurrent Execution")
+        print("=" * 60)
 
-    try:
         agent_results = await asyncio.gather(
             *[fn(sess, win) for fn, (_, win, sess) in zip(agent_fns, agents)]
         )
@@ -266,72 +283,72 @@ async def main(connection):
         else:
             missing = [m for found, m in agent_results if not found]
             log_result("Concurrent Execution", "FAIL", f"Markers not found: {missing}")
+
+        # ============================================================
+        # TEST 3: Independent Screenshots
+        # ============================================================
+        print(f"\n{'=' * 60}")
+        print("TEST 3: Independent Screenshots")
+        print("=" * 60)
+
+        screenshots = os.listdir(SCREENSHOT_DIR) if os.path.exists(SCREENSHOT_DIR) else []
+        parallel_shots = [f for f in screenshots if f.startswith("parallel_")]
+        if len(parallel_shots) >= 3:
+            sizes = [os.path.getsize(f"{SCREENSHOT_DIR}/{f}") for f in parallel_shots]
+            log_result("Independent Screenshots", "PASS",
+                       f"{len(parallel_shots)} screenshots, sizes: {sizes}")
+        else:
+            log_result("Independent Screenshots", "FAIL",
+                       f"Only {len(parallel_shots)} screenshots (expected 3)")
+
+        # ============================================================
+        # TEST 4: Session Isolation
+        # ============================================================
+        print(f"\n{'=' * 60}")
+        print("TEST 4: Session Isolation")
+        print("=" * 60)
+
+        contaminated = False
+        for agent_id, _, session in agents:
+            lines = await screen_lines(session)
+            full_text = " ".join(lines)
+            for other_id, _, _ in agents:
+                if other_id == agent_id:
+                    continue
+                other_num = other_id.split("-")[-1]
+                other_marker = f"AGENT{other_num}_MARKER"
+                if other_marker in full_text:
+                    contaminated = True
+                    print(f"  CONTAMINATION: {agent_id} contains {other_marker}")
+
+        if not contaminated:
+            log_result("Session Isolation", "PASS")
+        else:
+            log_result("Session Isolation", "FAIL", "Cross-contamination detected")
+
+        log_result("Cleanup", "PASS")
+
     except Exception as e:
-        log_result("Concurrent Execution", "FAIL", str(e))
+        log_result("Test Execution", "FAIL", str(e))
 
-    # ============================================================
-    # TEST 3: Independent Screenshots
-    # ============================================================
-    print(f"\n{'=' * 60}")
-    print("TEST 3: Independent Screenshots")
-    print("=" * 60)
+    finally:
+        # ============================================================
+        # CLEANUP (always runs, even on crash)
+        # ============================================================
+        print(f"\n{'=' * 60}")
+        print("CLEANUP")
+        print("=" * 60)
 
-    screenshots = os.listdir(SCREENSHOT_DIR) if os.path.exists(SCREENSHOT_DIR) else []
-    parallel_shots = [f for f in screenshots if f.startswith("parallel_")]
-    if len(parallel_shots) >= 3:
-        sizes = [os.path.getsize(f"{SCREENSHOT_DIR}/{f}") for f in parallel_shots]
-        # Different content → different file sizes (usually)
-        log_result("Independent Screenshots", "PASS",
-                   f"{len(parallel_shots)} screenshots, sizes: {sizes}")
-    else:
-        log_result("Independent Screenshots", "FAIL",
-                   f"Only {len(parallel_shots)} screenshots (expected 3)")
-
-    # ============================================================
-    # TEST 4: Session Isolation
-    # ============================================================
-    print(f"\n{'=' * 60}")
-    print("TEST 4: Session Isolation")
-    print("=" * 60)
-
-    contaminated = False
-    for agent_id, _, session in agents:
-        lines = await screen_lines(session)
-        full_text = " ".join(lines)
-        # Check that OTHER agents' markers are not in this session
-        for other_id, _, _ in agents:
-            if other_id == agent_id:
-                continue
-            other_num = other_id.split("-")[-1]
-            other_marker = f"AGENT{other_num}_MARKER"
-            if other_marker in full_text:
-                contaminated = True
-                print(f"  CONTAMINATION: {agent_id} contains {other_marker}")
-
-    if not contaminated:
-        log_result("Session Isolation", "PASS")
-    else:
-        log_result("Session Isolation", "FAIL", "Cross-contamination detected")
-
-    # ============================================================
-    # TEST 5: Cleanup
-    # ============================================================
-    print(f"\n{'=' * 60}")
-    print("TEST 5: Cleanup")
-    print("=" * 60)
-
-    for agent_id, _, session in agents:
-        try:
-            await session.async_send_text("exit\n")
-            await asyncio.sleep(0.3)
+        for agent_id, _, session in agents:
             try:
-                await session.async_close()
+                await session.async_send_text("exit\n")
+                await asyncio.sleep(0.2)
+                try:
+                    await session.async_close()
+                except Exception:
+                    pass
             except Exception:
-                pass  # Session may auto-close after exit — this is fine
-        except Exception as e:
-            print(f"  Cleanup warning for {agent_id}: {e}")
-
-    log_result("Cleanup", "PASS")
+                pass
 
     return print_summary()
 

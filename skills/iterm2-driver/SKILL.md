@@ -136,6 +136,9 @@ async def create_window(connection, name="test", x_pos=100, width=700, height=50
             break
         await asyncio.sleep(0.2)
 
+    if not window.current_tab or not window.current_tab.current_session:
+        raise RuntimeError(f"Window '{name}' not ready after refresh + probe")
+
     session = window.current_tab.current_session
     await session.async_set_name(name)
 
@@ -272,7 +275,7 @@ Track results with a `results` dict containing `passed`, `failed`, and `tests` l
 5. **Use `\r` for Enter in TUIs** — safer than `\n` for prompts
 6. **Dump screen on failure** — always show what went wrong
 7. **Verify layout** — check box-drawing characters connect properly
-8. **Use `suppress_broadcast=True`** — prevents text leaking to other sessions
+8. **Use `suppress_broadcast=True`** when broadcast input may be enabled (prevents text leaking to other sessions)
 
 ## Script Storage
 

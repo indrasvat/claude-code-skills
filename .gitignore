@@ -39,3 +39,6 @@ env/
 .tmp/
 screenshots/
 .claude/screenshots/
+
+.local/
+.codemap/

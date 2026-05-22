@@ -11,6 +11,12 @@
       "source": "./",
       "description": "14 Claude Code skills for dev workflows, CI/CD, Kubernetes, and AI-assisted development",
       "category": "productivity"
+    },
+    {
+      "name": "dootdashaa",
+      "source": "./plugins/dootdashaa",
+      "description": "Glanceable Claude Code statusline. Nerd Font icons, single line, ~9ms p50, optional per-repo AWS-credits segment.",
+      "category": "ui"
     }
   ]
 }

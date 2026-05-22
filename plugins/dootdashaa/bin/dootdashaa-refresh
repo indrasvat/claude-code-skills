@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# dootdashaa-refresh — cold-path AWS-credits poller.
+# Invoked by launchd at StartInterval=300. Atomically writes a
+# pre-rendered one-line ANSI fragment for the hot path to cat.
+# launchd's minimal env doesn't include /opt/homebrew/bin — exporting PATH.
+set +e
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+
+CACHE_DIR="${TMPDIR:-/tmp}/dootdashaa"
+if [ ! -d "$CACHE_DIR" ]; then
+  mkdir -p "$CACHE_DIR" 2>/dev/null
+  chmod 700 "$CACHE_DIR" 2>/dev/null
+fi
+OUT="$CACHE_DIR/aws.line"
+TMP="$OUT.tmp.$$"
+
+# Source command is configurable so the plugin doesn't hard-code any
+# private tooling. Set DOOTDASHAA_AWS_CMD to a script/binary that prints
+# one line like:  <Y><AWS_GLYPH><X><G>$123<X><D>·5mo<X>
+SRC="${DOOTDASHAA_AWS_CMD:-}"
+if [ -z "$SRC" ]; then
+  exit 0
+fi
+
+if ! line=$(eval "$SRC" 2>/dev/null); then
+  exit 0
+fi
+[ -z "$line" ] && exit 0
+
+printf '%s' "$line" > "$TMP" 2>/dev/null && mv -f "$TMP" "$OUT" 2>/dev/null
+rm -f "$TMP" 2>/dev/null
+exit 0

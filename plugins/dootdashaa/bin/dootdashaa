@@ -1,0 +1,292 @@
+#!/usr/bin/env bash
+# dootdashaa — Claude Code statusline (hot path).
+# §3 architecture: one jq call, 5s git mtime cache, ring-buffer token rate,
+# optional kartaa AWS segment. §4 perf budget: p50 ~9ms / p95 ~19ms.
+# set +e everywhere; always exit 0; never gate the line on one slow piece.
+
+set +e
+
+# ── ANSI ────────────────────────────────────────────────────────────────
+B=$'\033[1m'; D=$'\033[2m'; G=$'\033[32m'; Y=$'\033[33m'
+O=$'\033[38;5;208m'; R=$'\033[31m'; C=$'\033[36m'
+BL=$'\033[5m'; X=$'\033[0m'
+if [ -n "${NO_COLOR:-}" ]; then B=; D=; G=; Y=; O=; R=; C=; BL=; X=; fi
+
+# ── Nerd Font glyphs (raw UTF-8 hex; literal PUA chars get stripped) ────
+# Hot path only renders PR icon + battery family. Alarm glyphs (warn/pause/
+# rocket) live in the cold path because the aws.line is pre-rendered.
+PR_G=$'\xef\x90\x87'      # U+F407 nf-oct-git-pull-request
+BE=$'\xef\x89\x84'        # U+F244 nf-fa-battery-empty
+BQ=$'\xef\x89\x83'        # U+F243 nf-fa-battery-quarter
+BH=$'\xef\x89\x82'        # U+F242 nf-fa-battery-half
+B3=$'\xef\x89\x81'        # U+F241 nf-fa-battery-three-quarters
+BF=$'\xef\x89\x80'        # U+F240 nf-fa-battery-full
+
+# ── Cache dir (sha1-hashed filenames, 0700) ─────────────────────────────
+CACHE_DIR="${TMPDIR:-/tmp}/dootdashaa"
+if [ ! -d "$CACHE_DIR" ]; then
+  mkdir -p "$CACHE_DIR" 2>/dev/null
+  chmod 700 "$CACHE_DIR" 2>/dev/null
+fi
+
+input=$(cat)
+[ -z "$input" ] && { printf '%sClaude%s\n' "$D" "$X"; exit 0; }
+
+if ! command -v jq >/dev/null 2>&1; then
+  cwd=$(printf '%s' "$input" | sed -n 's/.*"cwd"[ ]*:[ ]*"\([^"]*\)".*/\1/p' | head -1)
+  printf '%sClaude%s  %s%s%s\n' "$D" "$X" "$B" "${cwd##*/}" "$X"
+  exit 0
+fi
+
+# ── ONE jq call → 15 fields joined with U+001F (bash read collapses empty
+#    runs of whitespace IFS, so we use a non-whitespace control char) ─────
+US=$'\x1f'
+tsv=$(printf '%s' "$input" | jq -r --arg us "$US" '
+  def s(v): if (v|type) == "string" then v else "" end;
+  def n(v): if (v|type) == "number" then v else 0 end;
+  [
+    s(.model.display_name) // s(.model.id) // "Claude",
+    s(.effort.level) // s(.model.effort) // "",
+    s(.workspace.repo.owner),
+    s(.workspace.repo.name),
+    s(.workspace.git_worktree),
+    s(.workspace.cwd) // s(.cwd) // s(.workspace.current_dir) // "",
+    s(.session_id) // s(.session.id) // "",
+    (if (.pr.number|type) == "number" then (.pr.number|tostring) else "" end),
+    s(.pr.state),
+    n(.context_window.used_percentage // .used_percentage),
+    n(.context_window.total_input_tokens // .total_input_tokens),
+    n(.cost.total_cost_usd // .cost),
+    n(.rate_limits.five_hour.used_percentage),
+    (if (.rate_limits.five_hour.resets_at|type) == "number"
+       then (.rate_limits.five_hour.resets_at|tostring)
+     elif (.rate_limits.five_hour.resets_at|type) == "string"
+       then .rate_limits.five_hour.resets_at
+     else "" end),
+    n(.rate_limits.seven_day.used_percentage // .rate_limits.weekly.used_percentage)
+  ] | map(tostring) | join($us)
+' 2>/dev/null)
+IFS="$US" read -r model effort repo_owner repo_name worktree cwd session_id \
+  pr_num pr_state ctx_pct ctx_toks cost_usd fivehr_pct fivehr_reset weekly_pct \
+  <<<"$tsv"
+
+# ── Model + effort ──────────────────────────────────────────────────────
+case "$model" in
+  *[Oo]pus*) mshort="Opus" ;;
+  *[Ss]onnet*|*Son*) mshort="Son" ;;
+  *[Hh]aiku*) mshort="Hai" ;;
+  *) mshort="${model:0:8}" ;;
+esac
+eff=""
+case "$effort" in
+  low) eff="${Y}·lo${X}" ;;
+  high) eff="${Y}·hi${X}" ;;
+  xhigh|extra_high|x-high) eff="${Y}·xh${X}" ;;
+  max|maximum) eff="${Y}·mx${X}" ;;
+esac
+model_seg="${D}${mshort}${X}${eff}"
+
+# ── Repo identity ───────────────────────────────────────────────────────
+if [ -n "$repo_name" ]; then
+  repo_label="$repo_name"
+else
+  repo_label="${cwd##*/}"
+  [ -z "$repo_label" ] && repo_label="?"
+fi
+[ -n "$worktree" ] && repo_label="${repo_label}·wt"
+repo_seg="${B}${repo_label}${X}"
+
+# ── Git status (5s mtime-keyed cache) ───────────────────────────────────
+branch=""; dirty=""; ahead=""; behind=""
+if [ -d "$cwd" ]; then
+  gitdir=""
+  if   [ -d "$cwd/.git" ]; then gitdir="$cwd/.git"
+  elif [ -f "$cwd/.git" ]; then gitdir=$(sed -n 's/^gitdir: //p' "$cwd/.git" | head -1)
+  fi
+  if [ -n "$gitdir" ] && [ -e "$gitdir" ]; then
+    hm=$(stat -f %m "$gitdir/HEAD" 2>/dev/null); im=$(stat -f %m "$gitdir/index" 2>/dev/null)
+    sig="${hm:-0}.${im:-0}"
+    key=$(printf '%s' "$cwd" | shasum 2>/dev/null | cut -c1-12)
+    cf="$CACHE_DIR/git-$key"
+    now=$(date +%s); cached_age=999
+    [ -f "$cf" ] && cached_age=$(( now - $(stat -f %m "$cf" 2>/dev/null || echo 0) ))
+    if [ -f "$cf" ] && [ "$(sed -n 1p "$cf")" = "$sig" ] && [ "$cached_age" -lt 5 ]; then
+      branch=$(sed -n 2p "$cf"); dirty=$(sed -n 3p "$cf")
+      ahead=$(sed -n 4p "$cf"); behind=$(sed -n 5p "$cf")
+    else
+      st=$(cd "$cwd" && git --no-optional-locks status --porcelain=v2 -b 2>/dev/null)
+      branch=$(printf '%s\n' "$st" | sed -n 's/^# branch.head //p')
+      ab=$(printf '%s\n' "$st" | sed -n 's/^# branch.ab //p')
+      ahead=$(printf '%s' "$ab" | awk '{print $1}' | tr -d '+'); [ "$ahead" = "0" ] && ahead=""
+      behind=$(printf '%s' "$ab" | awk '{print $2}' | tr -d '-'); [ "$behind" = "0" ] && behind=""
+      chg=$(printf '%s\n' "$st" | grep -cE '^[12u?]' 2>/dev/null); [ "${chg:-0}" -gt 0 ] && dirty=1
+      if [ "$branch" = "(detached)" ]; then
+        sha7=$(cd "$cwd" && git rev-parse --short HEAD 2>/dev/null)
+        branch="@${sha7:-?}"
+      fi
+      tmp="$cf.tmp.$$"
+      printf '%s\n%s\n%s\n%s\n%s\n' "$sig" "$branch" "$dirty" "$ahead" "$behind" > "$tmp" 2>/dev/null
+      mv -f "$tmp" "$cf" 2>/dev/null
+    fi
+  fi
+fi
+branch_seg=""
+if [ -n "$branch" ]; then
+  branch_seg="${C}${branch}${X}"
+  [ -n "$dirty" ] && branch_seg="${branch_seg}${Y}•${X}"
+  [ -n "$ahead" ]  && branch_seg="${branch_seg}${D}↑${ahead}${X}"
+  [ -n "$behind" ] && branch_seg="${branch_seg}${D}↓${behind}${X}"
+fi
+
+# ── PR + state (one icon, color = state) ────────────────────────────────
+pr_seg=""
+if [ -n "$pr_num" ] && [ "$pr_num" != "null" ] && [ "$pr_num" != "0" ]; then
+  case "$pr_state" in
+    approved)            pr_seg="${G}${PR_G}${G} ${pr_num}${X}" ;;
+    changes_requested)   pr_seg="${Y}${PR_G}${Y} ${pr_num}${X}" ;;
+    draft|pending|*)     pr_seg="${D}${PR_G}${D} ${pr_num}${X}" ;;
+  esac
+fi
+
+# ── Context gauge (5-bucket battery; precise % only ≥75%) ───────────────
+ctx_int=${ctx_pct%.*}; ctx_int=${ctx_int:-0}
+case "$ctx_int" in ''|*[!0-9]*) ctx_int=0 ;; esac
+if   [ "$ctx_int" -le 10 ]; then bat="$BE"; ccol="$D"
+elif [ "$ctx_int" -le 30 ]; then bat="$BQ"; ccol="$G"
+elif [ "$ctx_int" -le 55 ]; then bat="$BH"; ccol="$G"
+elif [ "$ctx_int" -le 74 ]; then bat="$B3"; ccol="$Y"
+elif [ "$ctx_int" -le 89 ]; then bat="$BF"; ccol="$O"
+else                              bat="$BF"; ccol="${BL}${R}"
+fi
+show_pct=0
+[ "$ctx_int" -ge 75 ] && show_pct=1
+[ "${DOOTDASHAA_GAUGE_PCT:-}" = "always" ] && show_pct=1
+if [ "$show_pct" = "1" ] && [ "$ctx_int" -gt 0 ]; then
+  gauge_seg="${ccol}${bat}${X} ${ccol}${ctx_int}%${X}"
+else
+  gauge_seg="${ccol}${bat}${X}"
+fi
+[ "$ctx_int" = "0" ] && gauge_seg="${D}${BE}${X}"
+
+# ── Token rate (ring buffer; reset on /compact monotonicity break) ──────
+rate_seg=""
+if [ -n "$session_id" ] && [ "${ctx_toks:-0}" -gt 0 ] 2>/dev/null; then
+  rkey=$(printf '%s' "$session_id" | shasum 2>/dev/null | cut -c1-12)
+  rf="$CACHE_DIR/rate-$rkey"; now=$(date +%s)
+  if [ -f "$rf" ]; then
+    last=$(tail -1 "$rf" 2>/dev/null | awk '{print $2}')
+    [ -n "$last" ] && [ "$ctx_toks" -lt "$last" ] 2>/dev/null && : > "$rf"
+  fi
+  printf '%s %s\n' "$now" "$ctx_toks" >> "$rf" 2>/dev/null
+  tail -5 "$rf" > "$rf.tmp" 2>/dev/null && mv -f "$rf.tmp" "$rf" 2>/dev/null
+  ft=$(head -1 "$rf" 2>/dev/null | awk '{print $1}')
+  fk=$(head -1 "$rf" 2>/dev/null | awk '{print $2}')
+  if [ -n "$ft" ] && [ "$now" -gt "$ft" ] && [ "${ctx_toks:-0}" -gt "${fk:-0}" ] 2>/dev/null; then
+    rate=$(( (ctx_toks - fk) / (now - ft) ))
+    if [ "$rate" -gt 0 ]; then
+      if   [ "$rate" -lt 60 ];  then rcol="$D"
+      elif [ "$rate" -lt 120 ]; then rcol="$Y"
+      else                            rcol="$R"
+      fi
+      rate_seg="${rcol}${rate}/s${X}"
+    fi
+  fi
+fi
+
+# ── Cost (hide when zero; colour-banded) ────────────────────────────────
+cost_seg=""
+if [ -n "$cost_usd" ] && [ "$cost_usd" != "0" ] && [ "$cost_usd" != "null" ]; then
+  cmp=$(awk -v c="$cost_usd" 'BEGIN{ if(c+0 >= 5) print "r"; else if(c+0 >= 1) print "y"; else if (c+0 > 0) print "g"; else print "" }')
+  case "$cmp" in
+    g) cost_seg=$(printf '%s$%.2f%s' "$G" "$cost_usd" "$X") ;;
+    y) cost_seg=$(printf '%s$%.2f%s' "$Y" "$cost_usd" "$X") ;;
+    r) cost_seg=$(printf '%s$%.2f%s' "$R" "$cost_usd" "$X") ;;
+  esac
+fi
+
+# ── 5h rate limit (countdown only when actionable) ──────────────────────
+# Returns total remaining minutes (integer ≥0); empty on parse failure.
+# Accepts either an epoch-seconds integer or ISO 8601 UTC ("YYYY-MM-DDTHH:MM:SSZ").
+remaining_mins() {
+  local rs="$1" now rs_epoch
+  case "$rs" in
+    ''|*[!0-9]*) rs_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$rs" +%s 2>/dev/null) ;;
+    *)           rs_epoch="$rs" ;;
+  esac
+  [ -z "$rs_epoch" ] && return 1
+  now=$(date +%s)
+  local m=$(( (rs_epoch - now) / 60 ))
+  [ "$m" -lt 0 ] && m=0
+  printf '%d' "$m"
+}
+fmt_mins() {
+  local m="$1"
+  if   [ "$m" -lt 60 ]; then printf '%dm' "$m"
+  else printf '%dh%02d' $((m/60)) $((m%60))
+  fi
+}
+fivehr_int=${fivehr_pct%.*}; fivehr_int=${fivehr_int:-0}
+case "$fivehr_int" in ''|*[!0-9]*) fivehr_int=0 ;; esac
+fivehr_seg=""
+if [ "$fivehr_int" -gt 0 ]; then
+  if   [ "$fivehr_int" -ge 90 ]; then fcol="${BL}${R}"
+  elif [ "$fivehr_int" -ge 75 ]; then fcol="$R"
+  elif [ "$fivehr_int" -ge 50 ]; then fcol="$Y"
+  else                                  fcol="$G"
+  fi
+  countdown=""
+  if [ -n "$fivehr_reset" ]; then
+    rmins=$(remaining_mins "$fivehr_reset")
+    # Drop the countdown when the parsed value is implausible for a 5h
+    # window (more than 5h = 300 min), or under the actionable threshold.
+    if [ -n "$rmins" ] && [ "$rmins" -ge 0 ] && [ "$rmins" -le 300 ]; then
+      urgent=0
+      [ "$rmins" -lt 60 ] && urgent=1
+      [ "$fivehr_int" -ge 70 ] && urgent=1
+      if [ "$urgent" = "1" ]; then
+        countdown="${D}·${X}${fcol}$(fmt_mins "$rmins")${X}"
+      fi
+    fi
+  fi
+  fivehr_seg="${D}5h${X}${fcol}${fivehr_int}%${X}${countdown}"
+fi
+
+# ── 7d limit (hidden when <20%) ─────────────────────────────────────────
+weekly_int=${weekly_pct%.*}; weekly_int=${weekly_int:-0}
+case "$weekly_int" in ''|*[!0-9]*) weekly_int=0 ;; esac
+weekly_seg=""
+if [ "$weekly_int" -ge 20 ]; then
+  if   [ "$weekly_int" -ge 75 ]; then wcol="$R"
+  elif [ "$weekly_int" -ge 50 ]; then wcol="$Y"
+  else                                  wcol="$G"
+  fi
+  weekly_seg="${D}7d${X}${wcol}${weekly_int}%${X}"
+fi
+
+# ── AWS-credits segment (opt-in via DOOTDASHAA_AWS_REPO=owner/repo) ─────
+aws_seg=""
+if [ -n "${DOOTDASHAA_AWS_REPO:-}" ]; then
+  aws_owner="${DOOTDASHAA_AWS_REPO%%/*}"; aws_repo="${DOOTDASHAA_AWS_REPO##*/}"
+  if [ "$repo_owner" = "$aws_owner" ] && [ "$repo_name" = "$aws_repo" ]; then
+    aws_file="$CACHE_DIR/aws.line"
+    [ -r "$aws_file" ] && aws_seg=$(cat "$aws_file" 2>/dev/null)
+  fi
+fi
+
+# ── Compose ─────────────────────────────────────────────────────────────
+cols="${COLUMNS:-0}"
+if [ "$cols" = "0" ] && [ -t 1 ]; then cols=$(tput cols 2>/dev/null || echo 100); fi
+[ "$cols" = "0" ] && cols=100
+
+join() { local out='' sep="  "; for s in "$@"; do [ -z "$s" ] && continue; [ -n "$out" ] && out="$out$sep"; out="$out$s"; done; printf '%s' "$out"; }
+identity=$(join "$model_seg" "$repo_seg $branch_seg" "$pr_seg")
+spend=$(join "$gauge_seg" "$rate_seg" "$cost_seg")
+limits=$(join "$fivehr_seg" "$weekly_seg")
+tail_seg=$(join "$spend" "$limits" "$aws_seg")
+
+if [ "$cols" -lt 80 ]; then
+  printf '%s\n%s\n' "$identity" "$tail_seg"
+else
+  printf '%s  %s\n' "$identity" "$tail_seg"
+fi
+exit 0

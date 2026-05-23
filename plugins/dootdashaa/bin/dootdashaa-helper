@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# dootdashaa-helper — ensure-symlinks subcommand invoked from SessionStart.
+#
+# Why symlinks: ${CLAUDE_PLUGIN_ROOT} changes on every plugin update
+# (Claude Code keeps old version dirs around briefly, then GCs). If
+# ~/.claude/settings.json referenced the absolute plugin path, every
+# update would break the statusline. The hook re-targets the stable
+# ~/.claude/bin/dootdashaa* symlinks on each session start.
+
+set +e
+
+cmd="${1:-}"
+here=$(cd "$(dirname "$0")" && pwd)
+
+case "$cmd" in
+  ensure-symlinks)
+    mkdir -p "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/bin"
+    ln -sfn "$here/dootdashaa"         "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/bin/dootdashaa"
+    ln -sfn "$here/dootdashaa-refresh" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/bin/dootdashaa-refresh"
+
+    marker_dir="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/dootdashaa}"
+    marker="$marker_dir/.first-run-done"
+    if [ ! -f "$marker" ]; then
+      mkdir -p "$marker_dir" 2>/dev/null
+      touch "$marker" 2>/dev/null
+      echo "dootdashaa installed. Run /dootdashaa:install to wire your statusLine." >&2
+    fi
+    exit 0
+    ;;
+  *)
+    echo "usage: dootdashaa-helper ensure-symlinks" >&2
+    exit 2
+    ;;
+esac

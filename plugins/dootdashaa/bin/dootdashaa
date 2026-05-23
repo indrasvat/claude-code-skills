@@ -42,18 +42,21 @@ fi
 #    runs of whitespace IFS, so we use a non-whitespace control char) ─────
 US=$'\x1f'
 tsv=$(printf '%s' "$input" | jq -r --arg us "$US" '
-  def s(v): if (v|type) == "string" then v else "" end;
+  # s() returns null for non-strings so // chains fall through correctly.
+  # An empty string is truthy in jq, so returning "" here would stop the
+  # // fallback chain at the first absent field.
+  def s(v): if (v|type) == "string" then v else null end;
   def n(v): if (v|type) == "number" then v else 0 end;
   [
     s(.model.display_name) // s(.model.id) // "Claude",
     s(.effort.level) // s(.model.effort) // "",
-    s(.workspace.repo.owner),
-    s(.workspace.repo.name),
-    s(.workspace.git_worktree),
+    s(.workspace.repo.owner) // "",
+    s(.workspace.repo.name) // "",
+    s(.workspace.git_worktree) // "",
     s(.workspace.cwd) // s(.cwd) // s(.workspace.current_dir) // "",
     s(.session_id) // s(.session.id) // "",
     (if (.pr.number|type) == "number" then (.pr.number|tostring) else "" end),
-    s(.pr.state),
+    s(.pr.state) // "",
     n(.context_window.used_percentage // .used_percentage),
     n(.context_window.total_input_tokens // .total_input_tokens),
     n(.cost.total_cost_usd // .cost),
@@ -101,7 +104,12 @@ branch=""; dirty=""; ahead=""; behind=""
 if [ -d "$cwd" ]; then
   gitdir=""
   if   [ -d "$cwd/.git" ]; then gitdir="$cwd/.git"
-  elif [ -f "$cwd/.git" ]; then gitdir=$(sed -n 's/^gitdir: //p' "$cwd/.git" | head -1)
+  elif [ -f "$cwd/.git" ]; then
+    gitdir=$(sed -n 's/^gitdir: //p' "$cwd/.git" | head -1)
+    # Submodule/linked-worktree .git files often carry a relative gitdir.
+    # Resolve it against $cwd so the [ -e ] check below works regardless of
+    # the script's own PWD.
+    case "$gitdir" in /*) ;; *) [ -n "$gitdir" ] && gitdir="$cwd/$gitdir" ;; esac
   fi
   if [ -n "$gitdir" ] && [ -e "$gitdir" ]; then
     hm=$(stat -f %m "$gitdir/HEAD" 2>/dev/null); im=$(stat -f %m "$gitdir/index" 2>/dev/null)

@@ -14,7 +14,7 @@ at dootdashaa; if a `statusLine_previous` backup exists, restores it.
 2. Perform the unwind atomically with `jq`:
    ```bash
    set -e
-   cfg="$HOME/.claude/settings.json"
+   cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
    tmp="$cfg.tmp.$$"
    jq '
      if (.statusLine.command // "") == "~/.claude/bin/dootdashaa" then

@@ -14,9 +14,9 @@ here=$(cd "$(dirname "$0")" && pwd)
 
 case "$cmd" in
   ensure-symlinks)
-    mkdir -p "$HOME/.claude/bin"
-    ln -sfn "$here/dootdashaa"         "$HOME/.claude/bin/dootdashaa"
-    ln -sfn "$here/dootdashaa-refresh" "$HOME/.claude/bin/dootdashaa-refresh"
+    mkdir -p "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/bin"
+    ln -sfn "$here/dootdashaa"         "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/bin/dootdashaa"
+    ln -sfn "$here/dootdashaa-refresh" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/bin/dootdashaa-refresh"
 
     marker_dir="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/dootdashaa}"
     marker="$marker_dir/.first-run-done"

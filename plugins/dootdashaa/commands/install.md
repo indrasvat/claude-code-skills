@@ -12,7 +12,7 @@ preserved as `statusLine.previous` so `/dootdashaa:uninstall` can restore it.
 
 1. Confirm the symlink exists. Run:
    ```bash
-   test -x "$HOME/.claude/bin/dootdashaa" || \
+   test -x "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/bin/dootdashaa" || \
      "${CLAUDE_PLUGIN_ROOT}/bin/dootdashaa-helper" ensure-symlinks
    ```
 
@@ -38,7 +38,7 @@ preserved as `statusLine.previous` so `/dootdashaa:uninstall` can restore it.
 5. Use `jq` to perform the merge — never hand-edit the file. Example:
    ```bash
    set -e
-   cfg="$HOME/.claude/settings.json"
+   cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
    tmp="$cfg.tmp.$$"
    [ -f "$cfg" ] || echo '{}' > "$cfg"
    jq '

@@ -80,5 +80,7 @@ secondary font to a NF.
 ## Design
 
 Source-of-truth design report (architecture, perf budget, bulletproof
-matrix, glyph alphabet) is in this repo at
-`.local/dootdashaa/DOOTDASHAA-DESIGN.html`.
+matrix, glyph alphabet) is checked in at
+[`docs/DESIGN.html`](docs/DESIGN.html). Open it locally in a browser for
+the full mockups, conditional-display rules, and verification spike
+walkthrough.

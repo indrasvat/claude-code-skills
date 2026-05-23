@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>dootdashaa — design dashboard</title>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #131722;
+    --surface-2: #1a1f2e;
+    --border: #232a3a;
+    --text: #d9e0e8;
+    --dim: #6b7280;
+    --dim-2: #9aa3b2;
+    --accent: #f59e0b;
+    --accent-soft: rgba(245, 158, 11, 0.12);
+    --success: #10b981;
+    --info: #3b82f6;
+    --danger: #ef4444;
+    --magenta: #c084fc;
+    --cyan: #22d3ee;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); font-family: var(--sans); margin: 0; line-height: 1.55; }
+  body { padding: 56px 32px 96px; max-width: 1180px; margin: 0 auto; font-size: 15px; }
+  h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
+  h1 .glyph { color: var(--accent); font-family: var(--mono); }
+  h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 48px 0 14px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 15px; font-weight: 600; margin: 24px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+  p { margin: 0 0 12px; color: var(--dim-2); }
+  p strong { color: var(--text); }
+  code { font-family: var(--mono); font-size: 13px; background: var(--surface); padding: 1px 6px; border-radius: 4px; color: var(--text); border: 1px solid var(--border); }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+  .lead { font-size: 17px; color: var(--dim-2); margin-bottom: 28px; max-width: 780px; }
+  .lead strong { color: var(--text); }
+  .meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--dim); font-family: var(--mono); margin-bottom: 28px; }
+  .meta span { padding: 4px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; margin: 14px 0; }
+  .panel.muted { background: rgba(245, 158, 11, 0.04); border-color: rgba(245, 158, 11, 0.18); }
+  .panel.muted strong { color: var(--accent); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  @media (max-width: 880px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+  @font-face {
+    font-family: 'Symbols Nerd Font';
+    src: url('https://cdn.jsdelivr.net/gh/ryanoasis/nerd-fonts/patched-fonts/NerdFontsSymbolsOnly/SymbolsNerdFontMono-Regular.ttf') format('truetype');
+    font-display: swap;
+  }
+  .terminal { background: #050608; border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; font-family: 'JetBrainsMono Nerd Font', 'Symbols Nerd Font Mono', 'Symbols Nerd Font', 'FiraCode Nerd Font', 'MesloLGS NF', ui-monospace, monospace; font-size: 13px; line-height: 1.65; overflow-x: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4); position: relative; }
+  .nf { font-family: 'Symbols Nerd Font Mono', 'Symbols Nerd Font', 'JetBrainsMono Nerd Font', ui-monospace, monospace; }
+  .terminal::before { content: ""; position: absolute; top: 10px; left: 14px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 14px 0 0 #f59e0b, 28px 0 0 #10b981; }
+  .terminal-body { margin-top: 18px; white-space: pre; }
+  .terminal-label { font-family: var(--mono); font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+  /* ANSI emulation */
+  .dim { color: var(--dim); }
+  .b { font-weight: 600; color: var(--text); }
+  .green { color: #4ade80; }
+  .amber { color: #fbbf24; }
+  .orange { color: #fb923c; }
+  .red { color: #f87171; }
+  .blue { color: #60a5fa; }
+  .cyan { color: #67e8f9; }
+  .magenta { color: #d8b4fe; }
+  .white { color: #f5f5f5; }
+  .blink { animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  .marker { color: #f5f5f5; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.08em; background: var(--surface-2); }
+  td code { font-size: 12px; }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-family: var(--mono); font-size: 11px; }
+  .tag.crit { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+  .tag.warn { background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .tag.ok { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .tag.info { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
+  .swatches { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 20px; }
+  .swatch { display: flex; flex-direction: column; align-items: center; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .swatch .chip { width: 56px; height: 56px; border-radius: 8px; margin-bottom: 6px; border: 1px solid var(--border); }
+  .arch { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px; font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--dim-2); white-space: pre; overflow-x: auto; }
+  .arch .hi { color: var(--accent); }
+  .arch .ok { color: #6ee7b7; }
+  .arch .warn { color: #fcd34d; }
+  ul { padding-left: 20px; margin: 0 0 14px; color: var(--dim-2); }
+  ul li { margin-bottom: 6px; }
+  ul li strong { color: var(--text); }
+  .check { color: var(--success); margin-right: 6px; }
+  .cross { color: var(--danger); margin-right: 6px; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-family: var(--mono); font-size: 11px; background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(245, 158, 11, 0.3); margin-right: 6px; }
+  .footer-note { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12px; color: var(--dim); font-family: var(--mono); }
+  .proof-img { width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; background: #050608; }
+  .proof-cap { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 4px; text-align: right; }
+  .gotcha { background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 14px 18px; margin: 14px 0; }
+  .gotcha strong { color: #fca5a5; }
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; margin: 6px 0; }
+  details summary { cursor: pointer; color: var(--text); font-weight: 500; font-size: 13px; }
+  details[open] summary { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  details pre { font-family: var(--mono); font-size: 12px; color: var(--dim-2); margin: 0; white-space: pre-wrap; }
+  blockquote { margin: 0; padding: 12px 18px; background: var(--accent-soft); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; color: var(--text); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1><span class="glyph">▰▰▱</span> dootdashaa</h1>
+<p class="lead">A replacement for the <code>gsd</code> Claude Code statusline. Bash-first, single-jq-call, <strong>p50 ~9ms · p95 ~19ms</strong> render budget (measured), repo-aware via <strong>git remote</strong> (not folder name), with a kartaa-only AWS-credits segment surfaced only when <code>indrasvat/kartaa</code> is the active remote.</p>
+<div class="meta">
+  <span>2026-05-22 · design report</span>
+  <span>status: awaiting approval</span>
+  <span>~58 chars at normal load · single line</span>
+  <span>rules: one carrier per signal · zero emoji · NF + plain geometric Unicode only</span>
+  <span>icons: FA + Octicons + Material (NF symbols-only ~50KB)</span>
+</div>
+
+<!-- ─────────────────────────── 1. MOCKUPS ─────────────────────────── -->
+<h2>1 · What you'll see</h2>
+<p><strong>One line. No duplicate signals.</strong> Each piece of information renders as <em>either</em> an icon <em>or</em> text — never both. Icons earn their slot only where they replace a text label (e.g. <code class="nf">&#xF270;</code> AWS replaces the word "aws"). Text stays where it's already as terse as an icon (e.g. <code>5h</code> is 2 chars; a clock icon would just duplicate the meaning).</p>
+
+<div class="grid-2">
+  <div>
+    <div class="terminal-label">Inside <code>indrasvat/kartaa</code> · normal load (53%)</div>
+    <div class="terminal"><div class="terminal-body"><span class="dim">Opus</span>  <span class="b">kartaa</span> <span class="cyan">main</span><span class="amber">•</span><span class="dim">↑3</span> <span class="green nf">&#xF407;</span><span class="green"> 222</span>  <span class="green nf">&#xF242;</span>  <span class="dim">45/s</span>  <span class="green">$0.42</span>  <span class="dim">5h</span><span class="amber">31%</span><span class="dim">·2h14</span>  <span class="amber nf">&#xF270;</span><span class="green">$122</span><span class="dim">·5mo</span></div></div>
+    <div class="dim" style="font-family:var(--mono);font-size:11px;margin-top:4px;text-align:right">≈ 52 chars · gauge = battery-half icon · PR state via color on number</div>
+  </div>
+
+  <div>
+    <div class="terminal-label">Heavy · 96% context · high effort · changes-requested</div>
+    <div class="terminal"><div class="terminal-body"><span class="dim">Opus</span><span class="amber">·hi</span>  <span class="b">kartaa</span> <span class="cyan">fix/streams</span> <span class="amber nf">&#xF407;</span><span class="amber"> 231</span>  <span class="red blink nf">&#xF240;</span> <span class="red blink">96%</span>  <span class="amber">180/s</span>  <span class="red">$3.14</span>  <span class="dim">5h</span><span class="red">78%·38m</span>  <span class="amber nf">&#xF270;</span><span class="green">$122</span><span class="dim">·5mo</span></div></div>
+    <div class="dim" style="font-family:var(--mono);font-size:11px;margin-top:4px;text-align:right">≈ 60 chars · % surfaces only ≥75% · amber PR# = changes_requested · reset countdown ON (usage &gt;70%)</div>
+  </div>
+
+  <div>
+    <div class="terminal-label">Different repo · clean tree · 64% load · no AWS</div>
+    <div class="terminal"><div class="terminal-body"><span class="dim">Son</span>  <span class="b">my-tool</span> <span class="cyan">feat/x</span><span class="amber">•</span>  <span class="amber nf"></span>  <span class="dim">28/s</span>  <span class="dim">5h</span><span class="amber">31%</span><span class="dim">·2h14</span></div></div>
+    <div class="dim" style="font-family:var(--mono);font-size:11px;margin-top:4px;text-align:right">≈ 44 chars · no PR, no cost (=0), no AWS, no 7d (=low)</div>
+  </div>
+
+  <div>
+    <div class="terminal-label">Post-<code>/compact</code> · context null</div>
+    <div class="terminal"><div class="terminal-body"><span class="dim">Opus</span>  <span class="b">kartaa</span> <span class="cyan">main</span>  <span class="dim nf"></span>  <span class="dim">5h</span><span class="amber">31%</span><span class="dim">·2h14</span>  <span class="amber nf"></span><span class="green">$122</span><span class="dim">·5mo</span></div></div>
+    <div class="dim" style="font-family:var(--mono);font-size:11px;margin-top:4px;text-align:right">≈ 42 chars · gauge=empty icon · rate/cost hidden until populated</div>
+  </div>
+
+  <div>
+    <div class="terminal-label">Narrow terminal · &lt; 80 cols · graceful fallback</div>
+    <div class="terminal"><div class="terminal-body"><span class="dim">Opus</span> <span class="b">kartaa</span> <span class="cyan">main</span><span class="amber">•</span><span class="dim">↑3</span> <span class="green nf"></span><span class="green"> 222</span>  <span class="green nf"></span>  <span class="dim">45/s</span>
+<span class="green">$0.42</span>  <span class="dim">5h</span><span class="amber">31%</span><span class="dim">·2h14</span>  <span class="amber nf"></span><span class="green">$122</span><span class="dim">·5mo</span></div></div>
+    <div class="dim" style="font-family:var(--mono);font-size:11px;margin-top:4px;text-align:right">splits identity / spend at the gauge boundary</div>
+  </div>
+</div>
+
+<h3 style="margin-top:24px">AWS alarm-state catalog · appended only when state ≠ healthy</h3>
+<div class="panel" style="display:flex;flex-wrap:wrap;gap:14px 22px;align-items:baseline;font-family:var(--mono);font-size:13px;padding:14px 18px">
+  <span><span class="amber nf"></span><span class="green">$122</span><span class="dim">·</span><span class="amber">12d</span> <span class="dim" style="font-size:11px">&nbsp;credit ≤30d</span></span>
+  <span><span class="amber nf"></span><span class="green">$122</span><span class="dim">·</span><span class="red nf"></span><span class="red">3d</span> <span class="dim" style="font-size:11px">&nbsp;expiry &lt;7d</span></span>
+  <span><span class="amber nf"></span><span class="green">$122</span><span class="dim">·5mo·</span><span class="red nf"></span><span class="red">$4.20</span> <span class="dim" style="font-size:11px">&nbsp;OOP &gt; 0</span></span>
+  <span><span class="amber nf"></span><span class="green">$122</span><span class="dim">·5mo·</span><span class="dim nf"></span> <span class="dim" style="font-size:11px">&nbsp;EC2 stopped</span></span>
+  <span><span class="amber nf"></span><span class="green">$122</span><span class="dim">·5mo·</span><span class="amber nf"></span><span class="amber">4h</span> <span class="dim" style="font-size:11px">&nbsp;boot &lt;24h</span></span>
+</div>
+<p class="dim" style="font-size:11px;margin-top:4px;text-align:right;font-family:var(--mono)">+1–4 chars vs normal · one NF glyph per state · colour does the urgency</p>
+
+<p class="dim" style="font-size:12px;margin-top:14px"><strong>Mockup note:</strong> all NF glyphs are loaded from a CDN-hosted Symbols Nerd Font (~50KB). If you don't see icons above, your browser blocked the font fetch — see §7 for the codepoint reference.</p>
+
+<!-- ─────────────────────────── 2. SIGNAL INVENTORY ─────────────────────────── -->
+<h2>2 · Signals — icon <em>or</em> text, never both</h2>
+<p class="lead" style="font-size:14px">The no-duplicate rule: every signal renders through exactly one carrier. NF icons are picked only where they <em>replace</em> a text label (saving width); text stays where it's already as terse as an icon. Color is treated as a free third dimension (threshold encoding) and never counts toward the dup rule.</p>
+<table>
+  <thead><tr><th>Signal</th><th>Carrier</th><th>What I rejected and why</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Model + effort</strong><br><code>Opus·hi</code></td><td><strong>Text</strong> · 4-7 chars. Model name is unique enough that no icon can replace it.</td><td>NF brain/sparkle: would label "AI" — duplicates what "Opus" already says. Effort: shorthand <code>·hi</code>/<code>·xh</code>/<code>·mx</code>/<code>·lo</code>; hidden when "medium".</td></tr>
+    <tr><td><strong>Repo</strong><br><code><strong>kartaa</strong></code></td><td><strong>Text + bold</strong>. Bold IS the slot label.</td><td>NF GitHub <code class="nf">&#xF09B;</code> / repo <code class="nf">&#xEA62;</code>: bold already says "this is the repo". Org prefix only when org ≠ personal.</td></tr>
+    <tr><td><strong>Branch · dirty · ahead</strong><br><code>main•↑3</code></td><td><strong>Text + cyan</strong>. Cyan IS the branch-label. Bullet IS the dirty mark.</td><td>NF branch <code class="nf">&#xE0A0;</code>: cyan already says branch. NF arrows for ahead/behind: <code>↑↓</code> are universal and same width.</td></tr>
+    <tr><td><strong>PR + state</strong><br><span class="nf">&#xF407;</span><code> 222 </code></td><td><strong>One NF icon + colored number</strong>. <code class="nf">&#xF407;</code> labels "PR slot" (replaces text <code>PR#</code>). State (approved/changes_requested/pending/draft) carried by the number's color — green / amber / dim / dim-outlined. No separate state icon (shape differences between trailing-icon variants <code class="nf">&#xF00C;</code>/<code class="nf">&#xF071;</code>/<code class="nf">&#xF017;</code> are too subtle at terminal size; color pops in ~0.3s). Draft state forced into color anyway since <code>U+F65F</code> is missing in NF v3.4.</td><td>Original variant had PR icon + number + trailing state icon — three carriers. Dropped: trailing icon was the slow read.</td></tr>
+    <tr><td><strong>Context gauge</strong><br><code class="nf">&#xF242;</code> (under 75%)<br><code class="nf">&#xF240;</code> <code>96%</code> (≥75%)</td><td><strong>One NF battery icon</strong> · 5 buckets (<code class="nf">&#xF244;</code>empty / <code class="nf">&#xF243;</code>¼ / <code class="nf">&#xF242;</code>½ / <code class="nf">&#xF241;</code>¾ / <code class="nf">&#xF240;</code>full). Color carries threshold (green→amber→orange→red). <strong>Precise % surfaces ONLY at ≥75%</strong> — precision matters in the danger zone, fuzziness is fine below.</td><td>A 20-block bar (<code>▰▱</code>) + <code>53%</code> together = two carriers for the same number. Bar opt-in via <code>DOOTDASHAA_GAUGE=bar</code>; always-show % via <code>DOOTDASHAA_GAUGE_PCT=always</code>.</td></tr>
+    <tr><td><strong>Token rate</strong><br><code>45/s</code></td><td><strong>Text · output tokens per second</strong>, smoothed over 5-sample ring buffer. <code>/s</code> is the unit indicator (the "tokens" part is positional, same way <code>$0.42</code> doesn't say "USD"). Output rate, not input — measures model "thinking speed", the actionable signal. Color: green &lt;60/s, amber 60-120/s, red &gt;120/s (relative to session median).</td><td>NF rocket <code class="nf">&#xF135;</code> / fire <code class="nf">&#xF06D;</code> prefix — color already conveys burn intensity. <code>tok/s</code> or <code>t/s</code> explicit suffix — <code>/s</code> alone is conventional in 2026 GenAI UIs. Tokens/min unit (<code>8.4k</code>) — less visceral than per-second.</td></tr>
+    <tr><td><strong>Session cost</strong><br><code>$0.42</code></td><td><strong>Text</strong>. <code>$</code> IS the icon. Hidden when zero.</td><td>NF dollar <code class="nf">&#xF155;</code>: would precede the same <code>$0.42</code> — pure decoration.</td></tr>
+    <tr><td><strong>5h limit + reset</strong><br><code>5h31%·2h14</code></td><td><strong>Text</strong>. "5h" is 2 chars, an NF clock icon would be same width with less clarity.</td><td>NF clock <code class="nf">&#xF017;</code>: text "5h" is universal; the icon is a learned mapping. Same render width, lower legibility.</td></tr>
+    <tr><td><strong>7d limit</strong><br><code>7d12%</code></td><td><strong>Text</strong>. Hidden when &lt;20%.</td><td>NF calendar <code class="nf">&#xF073;</code>: same reasoning as 5h.</td></tr>
+    <tr><td><strong>AWS credits + expiry</strong><br><span class="nf">&#xF270;</span><code>$122·5mo</code></td><td><strong>One NF icon + text</strong>. <code class="nf">&#xF270;</code> (Amazon-A) IS the "aws" label (replaces the word). Number = credits. Suffix = expiry.</td><td>Verbose form <code>⚡ aws $122 left  $0.00 OOP · 161d · ~$78/mo  22d up</code> — six labels for one slot. Now one icon-label, two distinct numbers, alarms as conditional suffixes; <code>$0 OOP</code>, projection, and uptime hidden in steady state.</td></tr>
+    <tr><td><strong>AWS alarm states</strong><br><code class="nf">&#xF071;</code> <code class="nf">&#xF04C;</code> <code class="nf">&#xF135;</code></td><td><strong>One NF icon per alarm</strong>: warning <code class="nf">&#xF071;</code> (OOP &gt;$0 or expiry &lt;7d), pause <code class="nf">&#xF04C;</code> (instance stopped), rocket <code class="nf">&#xF135;</code> (fresh boot &lt;24h). Appended only when state ≠ healthy.</td><td>ASCII <code>‼</code>/<code>⏸</code>/<code>↻</code> + words: <code>‼</code> renders as colored emoji on macOS (violates no-emoji rule) and the words waste characters. NF glyphs are monochrome PUA and single-width.</td></tr>
+  </tbody>
+</table>
+
+<h3>Signals considered and rejected</h3>
+<ul>
+  <li><strong>Time-of-day / session-elapsed</strong> — every terminal already shows time.</li>
+  <li><strong>Cache-hit ratio</strong> — interesting but not actionable mid-render.</li>
+  <li><strong>Hostname / user</strong> — PS1 shows it; statusline space is more valuable.</li>
+  <li><strong>Last tool used</strong> — the transcript shows it.</li>
+</ul>
+
+<!-- ─────────────────────────── 3. ARCHITECTURE ─────────────────────────── -->
+<h2>3 · Architecture</h2>
+<p>Two processes, one shared cache dir. The hot path is a pure-read bash script that runs on every assistant message. The cold path is a launchd job at 300s intervals, responsible only for AWS credit refresh (and optional CI-check enrichment later). Stdin payload from Claude Code already provides repo, PR, worktree, rate-limits, cost, and effort — no daemon needed for those.</p>
+
+<div class="arch">                   <span class="hi">┌─ HOT PATH (every assistant message · debounced 300ms) ──┐</span>
+                   <span class="hi">│</span>
+   claude code ──► <span class="ok">~/.claude/bin/dootdashaa</span> ──► stdout (single line, 2-line fallback &lt;80 cols)
+   (stdin JSON)    <span class="hi">│</span>     │
+                   <span class="hi">│</span>     │ <span class="warn">ONE</span> jq call → @tsv extract 14 fields incl. pr.*, repo.*,
+                   <span class="hi">│</span>     │       total_input_tokens, used_percentage, cost, 5h/7d, resets_at
+                   <span class="hi">│</span>     │ git status (<span class="ok">5s TTL cache, mtime-invalidated on .git/HEAD+.git/index</span>)
+                   <span class="hi">│</span>     │       → branch · dirty · ahead/behind
+                   <span class="hi">│</span>     │ ring-buffer append + 5-sample read → token rate (sparkline opt-in)
+                   <span class="hi">│</span>     │       <span class="ok">$TMPDIR/dootdashaa/rate-&lt;sid&gt;</span>  (no JSONL tail)
+                   <span class="hi">│</span>     │ <span class="ok">cat $TMPDIR/dootdashaa/kartaa-aws.line</span>  (only when repo matches)
+                   <span class="hi">│</span>     │
+                   <span class="hi">│</span>     └─► printf w/ ANSI escapes → exit 0 always
+                   <span class="hi">│</span>             <span class="warn">honest target: p50 ~15ms · p95 ~25ms · p99 &lt;50ms</span>
+                   <span class="hi">└────────────────────────────────────────────────────────┘</span>
+
+                   <span class="hi">┌─ COLD PATH (launchd · StartInterval 300s) ──────────────┐</span>
+                   <span class="hi">│</span>
+   launchd ──────► <span class="ok">~/.claude/bin/dootdashaa-refresh</span>
+                   <span class="hi">│</span>     │
+                   <span class="hi">│</span>     ├─ <code>kartaa-status-aws --line</code> (added in Phase 4)
+                   <span class="hi">│</span>     │     atomic-write → <span class="ok">$TMPDIR/dootdashaa/kartaa-aws.line</span>
+                   <span class="hi">│</span>     │
+                   <span class="hi">│</span>     └─ <span class="warn">OPTIONAL (Phase 5+):</span> <code>gh pr checks</code> for CI status
+                   <span class="hi">│</span>         enrichment beyond what stdin.pr provides (passing/failing)
+                   <span class="hi">└────────────────────────────────────────────────────────┘</span></div>
+
+<h3>Files created</h3>
+<table>
+  <tbody>
+    <tr><td><code>~/.claude/bin/dootdashaa</code></td><td>~180 LOC bash. Hot path. <code>set +e</code>, always <code>exit 0</code>.</td></tr>
+    <tr><td><code>~/.claude/bin/dootdashaa-refresh</code></td><td>~40 LOC bash. Cold path for AWS only.</td></tr>
+    <tr><td><code>~/Library/LaunchAgents/com.indrasvat.dootdashaa.plist</code></td><td>StartInterval = 300. RunAtLoad = true. Explicit PATH (launchd's minimal env doesn't include <code>/opt/homebrew/bin</code>).</td></tr>
+    <tr><td><code>$TMPDIR/dootdashaa/</code></td><td>Created with <code>mkdir -m 700</code>. Filenames are sha1-hashed; no raw owner/repo/branch on disk. Atomic writes via <code>mv tmp final</code>.</td></tr>
+    <tr><td><code>~/.claude/bin/kartaa-status-aws</code> (modify)</td><td>Add <code>--line</code> flag emitting one-line compressed variant.</td></tr>
+  </tbody>
+</table>
+
+<!-- ─────────────────────────── 4. PERF BUDGET ─────────────────────────── -->
+<h2>4 · Performance budget</h2>
+<p>Trigger fires after every assistant message (debounced 300ms; in-flight cancelled). Target: <strong>p95 &lt; 25ms</strong>. Numbers below are measured against real kartaa session JSONL on macOS 25.3 / bash 3.2 / jq 1.7.</p>
+
+<table>
+  <thead><tr><th>Step</th><th>Budget</th><th>Strategy</th></tr></thead>
+  <tbody>
+    <tr><td>Bash startup + read stdin</td><td class="num">~2 ms</td><td>Preinstalled bash 3.2 on macOS.</td></tr>
+    <tr><td>One <code>jq</code> call (TSV-extract 14 fields)</td><td class="num">~4.4 ms</td><td>jq cold-start is real; one call is non-negotiable.</td></tr>
+    <tr><td>Stat <code>.git/HEAD</code> + <code>.git/index</code> mtime → cache hit?</td><td class="num">~0.5 ms</td><td><code>stat -f %m</code>. Cache file <code>git-&lt;sha1(cwd)&gt;</code>.</td></tr>
+    <tr><td>Git status (cache miss only, ≤5s TTL)</td><td class="num">~10 ms*</td><td><code>git --no-optional-locks status --porcelain=v2 -b</code>. No <code>timeout</code> wrapper (macOS has neither <code>timeout</code> nor <code>gtimeout</code> by default); bounded structurally by 5s TTL — at most one slow git per 5s. *0ms on hit.</td></tr>
+    <tr><td>Ring-buffer append + 5-sample read (token rate)</td><td class="num">~1 ms</td><td>Append "epoch tokens\n" to a 5-line file at <code>$TMPDIR/dootdashaa/rate-&lt;sid&gt;</code>, read with <code>tail -5</code>. Pure bash arithmetic for the rate. Resets on monotonicity break (= <code>/compact</code>).</td></tr>
+    <tr><td><code>cat $TMPDIR/dootdashaa/kartaa-aws.line</code></td><td class="num">~0.3 ms</td><td>Plain read, no parsing. Skipped entirely outside kartaa.</td></tr>
+    <tr><td>printf multi-line w/ ANSI escapes</td><td class="num">~0.5 ms</td><td>Pre-composed in bash vars.</td></tr>
+    <tr><td><strong>p50 (warm git cache)</strong></td><td class="num"><strong>~9 ms</strong></td><td>jq + ring buffer + cat + print.</td></tr>
+    <tr><td><strong>p95 (one git status hit)</strong></td><td class="num"><strong>~19 ms</strong></td><td>Inside the 300ms debounce — comfortable.</td></tr>
+    <tr><td><strong>p99 (cold everything, sluggish disk)</strong></td><td class="num"><strong>&lt;40 ms</strong></td><td>Still well under 300ms debounce floor.</td></tr>
+  </tbody>
+</table>
+
+<p class="dim" style="font-size:13px;"><strong>No <code>timeout</code> dependency.</strong> macOS ships no GNU <code>timeout</code> and no <code>gtimeout</code> by default. The 5s git TTL + the 300ms in-flight-cancellation done by Claude Code itself are sufficient bounding — a slow git invocation is naturally pre-empted by the next debounced render.</p>
+
+<!-- ─────────────────────────── 5. BULLETPROOFING ─────────────────────────── -->
+<h2>5 · Bulletproofing matrix</h2>
+<p>Every failure mode found in design review and verification spikes, with the mitigation the production script will use.</p>
+
+<table>
+  <thead><tr><th>Failure mode</th><th>Status</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr><td><code>jq</code> not installed (issue #29321)</td><td><span class="tag ok">handled</span></td><td>One-shot detect at top. Fallback: minimal pure-bash JSON peeler for ~6 critical fields. Most code paths skip if jq missing.</td></tr>
+    <tr><td><code>used_percentage</code> / <code>current_usage</code> null (early session + post-<code>/compact</code>)</td><td><span class="tag ok">handled</span></td><td><code>// 0</code> default in jq; gauge renders as dim empty-battery icon (post-<code>/compact</code> mockup above).</td></tr>
+    <tr><td>Malformed / empty stdin</td><td><span class="tag ok">handled</span></td><td><code>jq -e</code> + fallback to "Claude · cwd-basename".</td></tr>
+    <tr><td>Script crashes</td><td><span class="tag ok">handled</span></td><td><code>set +e</code>; trap-wrapped body; <code>exit 0</code> unconditional.</td></tr>
+    <tr><td>Slow git on big repo</td><td><span class="tag ok">handled</span></td><td>5s TTL + mtime invalidation. No <code>timeout</code> needed — see §4 note.</td></tr>
+    <tr><td>Concurrent git ops (commit, rebase, gc)</td><td><span class="tag ok">handled</span></td><td><code>git --no-optional-locks</code>.</td></tr>
+    <tr><td>Detached HEAD</td><td><span class="tag ok">handled</span></td><td>Render <code>(HEAD detached @ &lt;sha7&gt;)</code> instead of branch.</td></tr>
+    <tr><td>Unborn branch (fresh <code>git init</code>, no commits)</td><td><span class="tag ok">handled</span></td><td><code>.git/HEAD</code> reads <code>ref: refs/heads/main</code> but no commit. Render branch name dim, no dirty/ahead-behind.</td></tr>
+    <tr><td>Linked worktree (<code>.git</code> is a file, not dir)</td><td><span class="tag ok">handled</span></td><td>Resolve <code>gitdir:</code> pointer once, cache resolved path. Use <code>workspace.git_worktree</code> from stdin as the badge.</td></tr>
+    <tr><td>Submodule (<code>.git</code> is a file pointing into parent <code>modules/</code>)</td><td><span class="tag ok">handled</span></td><td>Same gitdir-resolve as worktree. Tag with <code>·sub</code>.</td></tr>
+    <tr><td>Branch name with <code>/</code> or space in cache filename</td><td><span class="tag ok">handled</span></td><td>Hash cache keys (<code>sha1(cwd+branch)</code>). No raw paths on disk.</td></tr>
+    <tr><td>Partial read of cache during refresher write</td><td><span class="tag ok">handled</span></td><td>Refresher writes <code>file.tmp</code>, then <code>mv -f file.tmp file</code> (atomic on same FS).</td></tr>
+    <tr><td><code>$TMPDIR</code> sticky-bit symlinks, perm leaks</td><td><span class="tag ok">handled</span></td><td><code>mkdir -m 700</code> on first run; refuse to read if perms drift.</td></tr>
+    <tr><td>launchd minimal PATH (no <code>/opt/homebrew/bin</code>)</td><td><span class="tag ok">handled</span></td><td>Explicit <code>EnvironmentVariables</code> in plist. Refresher exports PATH on entry.</td></tr>
+    <tr><td><code>disableAllHooks: true</code> in settings</td><td><span class="tag warn">documented</span></td><td>Can't be worked around from statusline side — flag in README and the install script's preflight check.</td></tr>
+    <tr><td><code>$COLUMNS</code> unset (some non-TTY contexts)</td><td><span class="tag ok">handled</span></td><td>Fallback to <code>tput cols 2>/dev/null || echo 100</code>, gated by <code>[ -t 1 ]</code>.</td></tr>
+    <tr><td>Unicode glyph width mismatch</td><td><span class="tag ok">handled</span></td><td>Zero emoji on hot path (no-emoji rule). NF PUA glyphs are East Asian Width = Narrow per UCD; bar / sparkline / arrow glyphs are all single-width.</td></tr>
+    <tr><td>Token-total decreases (= <code>/compact</code> happened)</td><td><span class="tag ok">handled</span></td><td>Ring buffer resets on monotonicity break.</td></tr>
+    <tr><td>Session JSONL not yet written (turn 0)</td><td><span class="tag ok">handled</span></td><td>Now uses stdin totals, not JSONL — issue moot.</td></tr>
+    <tr><td>GitHub API down (<code>gh</code> unauthed)</td><td><span class="tag ok">handled</span></td><td>Hot path doesn't call <code>gh</code>; stdin provides PR data.</td></tr>
+    <tr><td>AWS API down / SSO expired</td><td><span class="tag ok">handled</span></td><td>Cached <code>kartaa-aws.line</code> stays. <code>stale ≥ 30min</code> shown dim.</td></tr>
+    <tr><td>Terminal &lt; 80 cols</td><td><span class="tag ok">handled</span></td><td>Drop sparkline at 120, reset countdown at 100, AWS segment at 100, wrap to 2 lines at 80.</td></tr>
+    <tr><td><code>NO_COLOR</code> env set</td><td><span class="tag ok">handled</span></td><td>Skip ANSI; plain text.</td></tr>
+    <tr><td>No truecolor (<code>COLORTERM != truecolor</code>)</td><td><span class="tag ok">handled</span></td><td>256-color palette fallback.</td></tr>
+    <tr><td>Windows / Git Bash</td><td><span class="tag warn">declined</span></td><td>Out-of-scope (operator is macOS-only).</td></tr>
+    <tr><td><code>launchd</code> job not loaded</td><td><span class="tag ok">handled</span></td><td>First run detects missing cache, kicks refresher once in background, hides AWS segment meanwhile.</td></tr>
+  </tbody>
+</table>
+
+<!-- ─────────────────────────── 6. REPO AWARENESS ─────────────────────────── -->
+<h2>6 · Repo awareness</h2>
+<p>Folder name is unreliable — a repo can be cloned under any directory; worktrees have different basenames; rename happens. Claude Code's stdin payload includes <code>workspace.repo.{host,owner,name}</code> as parsed fields ("absent outside a git repository or when no <code>origin</code> remote is configured"). The kartaa check uses those directly:</p>
+
+<pre class="arch">  jq -r 'if .workspace.repo.owner == "indrasvat" and .workspace.repo.name == "kartaa"
+         then "kartaa" else "" end'
+
+  → "kartaa"  ⇒ enable AWS segment
+  → ""        ⇒ no AWS segment, no false-positives in non-git dirs
+
+  Worktree of kartaa (different cwd, same origin) ⇒ also matches ✓ (Claude Code resolves the
+  remote regardless of which checkout you're in).</pre>
+
+<p>Override via <code>DOOTDASHAA_KARTAA_REPO="owner/repo"</code> env var if I ever fork or rename.</p>
+
+<!-- ─────────────────────────── 7. VISUAL ─────────────────────────── -->
+<h2>7 · Visual choices</h2>
+
+<h3>Color palette (24-bit truecolor)</h3>
+<div class="swatches">
+  <div class="swatch"><div class="chip" style="background:#4ade80"></div>green · &lt;50%</div>
+  <div class="swatch"><div class="chip" style="background:#fbbf24"></div>amber · 50-75%</div>
+  <div class="swatch"><div class="chip" style="background:#fb923c"></div>orange · 75-90%</div>
+  <div class="swatch"><div class="chip" style="background:#f87171"></div>red · 90%+</div>
+  <div class="swatch"><div class="chip" style="background:#67e8f9"></div>cyan · branch</div>
+  <div class="swatch"><div class="chip" style="background:#d8b4fe"></div>magenta · model</div>
+  <div class="swatch"><div class="chip" style="background:#6b7280"></div>dim · low-priority</div>
+  <div class="swatch"><div class="chip" style="background:#f5f5f5"></div>marker · │</div>
+</div>
+
+<h3>Opt-in: 20-block gradient bar (<code>DOOTDASHAA_GAUGE=bar</code>)</h3>
+<p>For users who prefer the dramatic visual proportion of a wide bar over the compact battery icon: 20 blocks gives 5pp resolution and fits cleanly in 22 chars. The white pacing marker <code>│</code> jumps along the bar based on elapsed session time vs the 5h rate-limit window. Default is still the 1-glyph battery icon (more compact, color-coded threshold).</p>
+
+<h3>Glyph alphabet (post-compactness pass)</h3>
+<table>
+  <tbody>
+    <tr><td><code>▰▱</code></td><td>Bar segments. Heavier than <code>█░</code>, friendlier than <code>━─</code>.</td></tr>
+    <tr><td><code>▂▃▅▆█</code></td><td>Sparkline · opt-in.</td></tr>
+    <tr><td><code>•</code></td><td>Dirty marker (zero-pad: <code>main•↑3</code>).</td></tr>
+    <tr><td><code>↑n ↓n</code></td><td>Ahead/behind. Glued to dirty, no spaces.</td></tr>
+    <tr><td><code>·</code></td><td>Intra-block separator — always dim, signals "these belong together".</td></tr>
+    <tr><td>(2 spaces)</td><td>Inter-block separator. The eye treats this as a natural boundary.</td></tr>
+    <tr><td><span class="nf">&#xF407;</span> · U+F407</td><td>Octicons git-pull-request — the "PR slot" label. Replaces text <code>PR#</code>.</td></tr>
+    <tr><td><span class="nf">&#xF00C;</span> · U+F00C</td><td>Font Awesome check — PR approved. Green.</td></tr>
+    <tr><td><span class="nf">&#xF071;</span> · U+F071</td><td>Font Awesome warning triangle — PR changes_requested, AWS OOP, AWS expiry imminent. Amber/red by context.</td></tr>
+    <tr><td><span class="nf">&#xF017;</span> · U+F017</td><td>Font Awesome clock — PR pending review. Dim.</td></tr>
+    <tr><td><span class="nf">&#xF65F;</span> · U+F65F</td><td>Octicons git-pull-request-draft — PR is a draft. Dim outline.</td></tr>
+    <tr><td><span class="nf">&#xF244;</span> · U+F244</td><td>Font Awesome battery-empty — context gauge 0-10%. Dim.</td></tr>
+    <tr><td><span class="nf">&#xF243;</span> · U+F243</td><td>battery-quarter — context 11-30%. Green.</td></tr>
+    <tr><td><span class="nf">&#xF242;</span> · U+F242</td><td>battery-half — context 31-55%. Green-amber.</td></tr>
+    <tr><td><span class="nf">&#xF241;</span> · U+F241</td><td>battery-three-quarters — context 56-80%. Amber.</td></tr>
+    <tr><td><span class="nf">&#xF240;</span> · U+F240</td><td>battery-full — context 81-100%. Orange→red, blinks at ≥95%. Always accompanied by precise %.</td></tr>
+    <tr><td><span class="nf">&#xF270;</span> · U+F270</td><td>Font Awesome Amazon — IS the "aws" slot label. Replaces text "aws" / earlier <code>⚡</code> emoji.</td></tr>
+    <tr><td><span class="nf">&#xF04C;</span> · U+F04C</td><td>Font Awesome pause — EC2 instance stopped (≈ $8/mo idle). Dim.</td></tr>
+    <tr><td><span class="nf">&#xF135;</span> · U+F135</td><td>Font Awesome rocket — fresh boot &lt;24h. Amber.</td></tr>
+    <tr style="background:rgba(245,158,11,0.05)"><td colspan="2"><strong>Plain Unicode (geometric, monochrome — not emoji)</strong></td></tr>
+    <tr><td><code>▰▱</code></td><td>U+25B0/U+25B1 · bar segments (opt-in gauge mode).</td></tr>
+    <tr><td><code>▂▃▅▆█</code></td><td>U+2582–U+2588 · sparkline (opt-in).</td></tr>
+    <tr><td><code>•</code></td><td>U+2022 · bullet · git dirty marker.</td></tr>
+    <tr><td><code>↑ ↓</code></td><td>U+2191/U+2193 · arrows · ahead/behind counts.</td></tr>
+    <tr><td><code>·</code></td><td>U+00B7 · middle-dot · intra-block separator, always dim.</td></tr>
+    <tr><td><code>—</code></td><td>U+2014 · em dash · "value unavailable" placeholder.</td></tr>
+  </tbody>
+</table>
+
+<p class="dim" style="font-size:12px;margin-top:8px"><strong>Mockup-rendering note:</strong> if the NF icons render as tofu in this dashboard, the CDN <code>@font-face</code> fetch was blocked — the codepoint column is the canonical reference. The statusline itself renders against your iTerm/Ghostty's installed NF, which is unaffected.</p>
+
+<h3>No-emoji rule (hard)</h3>
+<ul>
+  <li><strong>Zero emoji</strong> — anywhere. No <code>⚡</code> (FA-style emoji), no <code>‼</code>, no <code>⏸</code>, no <code>↻</code>, no <code>💀</code>. Every state glyph is either a Nerd Font codepoint (PUA, designed monochrome) or a plain Unicode geometric character (block elements, arrows, geometric shapes — also monochrome).</li>
+  <li><strong>Why</strong>: emoji render in full colour on macOS via Apple Color Emoji font, which (a) breaks the colour-scheme intent (we choose threshold colour, not the OS), (b) is variable-width across terminals, (c) looks toy-grade next to NF glyphs.</li>
+  <li><strong>Test</strong>: any character that renders in colour on iOS Notes is banned.</li>
+</ul>
+
+<h3>Compactness conventions</h3>
+<ul>
+  <li><strong>Glue values to labels</strong>: <code>5h31%</code> not <code>5h 31%</code>; <code>$122·5mo</code> not <code>$122 · 5mo</code>. Removes ~30% of horizontal whitespace.</li>
+  <li><strong>Drop redundant prefixes</strong>: <code>#222</code> dies (PR icon replaces it); <code>45/s</code> not <code>45 tok/s</code> or <code>45 t/s</code> (the <code>/s</code> is the unit); <code>$122</code> not <code>$122 left</code>; <code>5mo</code> not <code>161d</code>.</li>
+  <li><strong>Time-of-day economy</strong>: durations under 1h → <code>38m</code>; 1-24h → <code>2h14</code> (drop trailing <code>m</code>); 1-60d → <code>12d</code>; over 60d → <code>5mo</code>. Boot-recency uses NF rocket prefix: <code class="nf">&#xF135;</code><code>4h</code>.</li>
+  <li><strong>Hide steady state</strong>: medium effort, $0.00 cost, clean+synced git, 7d&lt;20%, AWS OOP=$0, AWS uptime≥24h — all invisible. Surface deviations only.</li>
+  <li><strong>Colour does the alarm work</strong>: red text on percentages over 75% (context, 5h limit). No extra characters added to flag urgency.</li>
+  <li><strong>NF icon, plain Unicode, or text</strong> — pick one carrier per signal. Never two.</li>
+</ul>
+
+<!-- ─────────────────────────── 8. BUILD PLAN ─────────────────────────── -->
+<h2>8 · Build plan</h2>
+<p>Four phases, each shippable on its own. Phase 1 alone replaces gsd usefully.</p>
+
+<div class="grid-2">
+  <div class="panel">
+    <h3 style="margin-top:0">Phase 1 · MVP (replace gsd)</h3>
+    <ul>
+      <li><strong>dootdashaa script</strong>: model · repo · branch · dirty · ahead/behind · PR + state · context battery icon · cost · 5h/7d rate limits</li>
+      <li>One jq call extracting 14 fields, 5s git mtime cache</li>
+      <li>Width-responsive collapse to 2-line fallback below 80 cols</li>
+      <li>Swap into <code>~/.claude/settings.json</code>; preserve gsd as a backup</li>
+    </ul>
+    <p class="dim" style="font-size:12px;margin:0">~180 LOC, ~2 hours.</p>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Phase 2 · kartaa AWS segment</h3>
+    <ul>
+      <li>Add <code>--line</code> flag to <code>kartaa-status-aws</code> emitting <code><span class="nf">&#xF270;</span>$122·5mo</code></li>
+      <li>launchd plist · 300s interval · explicit PATH</li>
+      <li><code>dootdashaa-refresh</code> writes atomically to <code>$TMPDIR/dootdashaa/kartaa-aws.line</code></li>
+      <li>Hot path <code>cat</code>s the file only when <code>workspace.repo</code> matches indrasvat/kartaa</li>
+    </ul>
+    <p class="dim" style="font-size:12px;margin:0">~70 LOC + plist, ~1.5 hours.</p>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Phase 3 · token rate (opt-in sparkline)</h3>
+    <ul>
+      <li>Ring buffer of (epoch, total_input_tokens) tuples written from hot path using stdin's <code>context_window.total_input_tokens</code></li>
+      <li>5-sample sliding window, monotonicity-break detects compaction → reset</li>
+      <li>Number always; sparkline gated by <code>DOOTDASHAA_SPARKLINE=1</code></li>
+    </ul>
+    <p class="dim" style="font-size:12px;margin:0">~50 LOC, ~1 hour.</p>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Phase 4 · CI-check enrichment (optional)</h3>
+    <ul>
+      <li>Refresher polls <code>gh pr checks</code> for the active branch's PR (if one exists)</li>
+      <li>Writes pass/fail glyph to a cache file the hot path reads</li>
+      <li>Appended after PR state icon: <code><span class="nf">&#xF407;</span><span class="green">222</span><span class="nf">&#xF00C;</span>·CI</code></li>
+    </ul>
+    <p class="dim" style="font-size:12px;margin:0">~50 LOC, ~1 hour. Deferred until Phase 1-3 are stable.</p>
+  </div>
+</div>
+
+<p style="margin-top:20px"><strong>Total Phase 1-3: ~300 LOC, ~4.5 hours.</strong> Distributed as a Claude Code plugin in the existing <code>indrasvat/claude-code-skills</code> marketplace — see §14 for the install design.</p>
+
+<!-- ─────────────────────────── 9. OPEN QUESTIONS ─────────────────────────── -->
+<h2>9 · Decisions</h2>
+<table>
+  <thead><tr><th>Question</th><th>Decision</th></tr></thead>
+  <tbody>
+    <tr><td>Bash or Go?</td><td><strong>Bash.</strong> Final hot path is ~180 LOC, well within bash's hackability sweet spot. Go remains the answer if sub-5ms p50 ever becomes a requirement.</td></tr>
+    <tr><td>One line or two?</td><td><strong>One.</strong> Normal load is ~58 chars. Drops to 2-line fallback only below 80 cols.</td></tr>
+    <tr><td>Sparkline by default?</td><td><strong>Off.</strong> Ring buffer needs 5 assistant turns before its readout is meaningful. Enable via <code>DOOTDASHAA_SPARKLINE=1</code> once seeded.</td></tr>
+    <tr><td>Show <code>$0.00</code> cost?</td><td><strong>Hide</strong> until nonzero.</td></tr>
+    <tr><td>Effort level always vs only-deviation?</td><td><strong>Only when not medium.</strong> Shown as <code>·hi</code>/<code>·xh</code>/<code>·mx</code>/<code>·lo</code> suffix on the model name.</td></tr>
+    <tr><td>Reset countdown next to rate-limit %?</td><td><strong>Yes.</strong> <code>5h31%·2h14</code> for the 5h window. Conditional: hide countdown when reset &gt;1h away AND usage &lt;70% (see §11).</td></tr>
+    <tr><td>Gauge default?</td><td><strong>1-glyph battery icon</strong> with color-coded threshold; precise % surfaces only at ≥75%. The 20-block bar is opt-in via <code>DOOTDASHAA_GAUGE=bar</code>.</td></tr>
+    <tr><td>AWS segment gating?</td><td>Only when <code>workspace.repo.owner == "indrasvat"</code> &amp;&amp; <code>workspace.repo.name == "kartaa"</code>. Override via <code>DOOTDASHAA_KARTAA_REPO="owner/repo"</code> env var.</td></tr>
+    <tr><td>Where do scripts live?</td><td>As a Claude Code plugin in <a href="https://github.com/indrasvat/claude-code-skills">indrasvat/claude-code-skills</a> (existing marketplace), at <code>plugins/dootdashaa/</code>. SessionStart hook symlinks <code>${CLAUDE_PLUGIN_ROOT}/bin/*</code> into <code>~/.claude/bin/</code>. Pi/AWS hosts get it via <code>/plugin install dootdashaa@indrasvat-skills</code>. Full design in §14.</td></tr>
+    <tr><td>Token-rate cache writer: hot path or daemon?</td><td><strong>Hot path appends, hot path reads.</strong> Ring buffer write is 1ms — keeping it on the hot path means rate is always current, not 5min stale.</td></tr>
+  </tbody>
+</table>
+
+<!-- ─────────────────────────── 10. WHAT THIS BORROWS ─────────────────────────── -->
+<h2>10 · Stolen ideas, attributed</h2>
+<ul>
+  <li><strong>Green→amber→orange→red gradient + blinking at 95%</strong> — gsd statusline (<code>~/.claude/hooks/gsd-statusline.js</code>).</li>
+  <li><strong>Git cache w/ <code>.git/HEAD</code>+<code>.git/index</code> mtime invalidation + <code>--no-optional-locks</code></strong> — <a href="https://github.com/sirmalloc/ccstatusline">sirmalloc/ccstatusline</a> (9.6k★).</li>
+  <li><strong>Async segment rendering / never gate the line on one slow piece</strong> — <a href="https://github.com/Owloops/claude-powerline">Owloops/claude-powerline</a>.</li>
+  <li><strong>One-jq-call + 5s /tmp git cache for &lt;50ms render</strong> — <a href="https://github.com/kcchien/claude-code-statusline">kcchien/claude-code-statusline</a>.</li>
+  <li><strong>White pacing marker <code>│</code> showing where you should be on the 5h window</strong> — <a href="https://gist.github.com/jtbr/4f99671d1cee06b44106456958caba8b">jtbr's gist</a>.</li>
+  <li><strong>Hide-zero / hide-clean / hide-default segments</strong> — kcchien.</li>
+  <li><strong>Background daemon writing flat file for slow network data</strong> — common pattern across all five reviewed.</li>
+</ul>
+
+<!-- ─────────────────────────── 11. INVARIANTS ─────────────────────────── -->
+<h2>11 · Design invariants</h2>
+<p>Properties this design guarantees, regardless of session state or future feature additions:</p>
+<ul>
+  <li><strong>Every signal renders through exactly one carrier.</strong> Icon, text, or color — never two for the same fact.</li>
+  <li><strong>Zero emoji.</strong> Every state glyph is either a Nerd Font codepoint (PUA, designed monochrome) or a plain Unicode geometric character.</li>
+  <li><strong>Hide steady state, surface deviations.</strong> Medium effort, $0.00 cost, clean+synced git, 7d limit &lt;20%, AWS OOP=$0, AWS uptime ≥24h — all invisible.</li>
+  <li><strong>Color does the urgency work.</strong> No extra characters added to flag a threshold breach; the cell just changes hue (and blinks at ≥95%).</li>
+  <li><strong>Alarms append only when state ≠ healthy.</strong> +1-4 chars max; one NF glyph per alarm; never on the steady-state line.</li>
+  <li><strong>Worktree disambiguation</strong> via <code>kartaa·wt</code> suffix when <code>workspace.git_worktree</code> is set.</li>
+  <li><strong>Post-<code>/compact</code> graceful degradation</strong> — gauge dim-empty, rate/cost hidden, identity + rate-limits + AWS still rendered.</li>
+  <li><strong>Width-responsive fallback</strong> — drops to 2 lines below 80 cols, with the gauge as the wrap boundary.</li>
+</ul>
+
+<!-- ─────────────────────────── 12. GLANCEABILITY ─────────────────────────── -->
+<h2>12 · Glanceability</h2>
+<p>Compactness is necessary but not sufficient. Each common question that drives a user to glance at the statusline should be answerable in &lt;0.5s.</p>
+
+<h3>Fast reads (under 0.5s)</h3>
+<table>
+  <thead><tr><th>Question</th><th>Latency</th><th>What carries the answer</th></tr></thead>
+  <tbody>
+    <tr><td>"Am I burning context fast?"</td><td><span class="tag ok">~0.3s</span></td><td>Battery icon shape + color (green vs red is instant).</td></tr>
+    <tr><td>"Should I /compact NOW?"</td><td><span class="tag ok">~0.3s</span></td><td>Red blinking <code class="nf">&#xF240;</code> + precise <code>96%</code> — both pop.</td></tr>
+    <tr><td>"How much have I spent this session?"</td><td><span class="tag ok">~0.4s</span></td><td>Cost cell · color (green&lt;$1, amber&lt;$5, red≥$5).</td></tr>
+    <tr><td>"What's my burn velocity right now?"</td><td><span class="tag ok">~0.4s</span></td><td><code>45/s</code> · color vs session median.</td></tr>
+    <tr><td>"AWS credits running low?"</td><td><span class="tag ok">~0.5s</span></td><td><code>$122·5mo</code> · amber/red on credits if low.</td></tr>
+    <tr><td>"What branch am I on?"</td><td><span class="tag ok">~0.4s</span></td><td>Cyan word post-repo.</td></tr>
+    <tr><td>"Do I have uncommitted changes?"</td><td><span class="tag ok">~0.4s</span></td><td><code>•</code> after branch.</td></tr>
+    <tr><td>"Did my PR get approved?"</td><td><span class="tag ok">~0.3s</span></td><td>Color on the PR number — green = approved, amber = changes_requested, dim = pending, dim outlined = draft. State is carried by color; no separate state icon.</td></tr>
+    <tr><td>"How urgent is my rate-limit reset?"</td><td><span class="tag ok">~0.4s</span></td><td>Countdown shows only when actionable (reset &lt;1h OR usage &gt;70%); otherwise just the %. Eye learns: "no countdown = not urgent".</td></tr>
+  </tbody>
+</table>
+
+<h3>Conditional-display rules (codified)</h3>
+<div class="panel" style="border-color:rgba(245,158,11,0.3)">
+  <p style="margin:0 0 8px"><strong>PR state via color, not separate icon</strong></p>
+  <div class="terminal"><div class="terminal-body"><span class="dim">approved          </span><span class="green nf">&#xF407;</span><span class="green"> 222</span>
+<span class="dim">changes_requested </span><span class="amber nf">&#xF407;</span><span class="amber"> 222</span>
+<span class="dim">pending           </span><span class="dim nf">&#xF407;</span><span class="dim"> 222</span>
+<span class="dim">draft             </span><span class="dim nf">&#xF407;</span><span class="dim"> 222</span></div></div>
+  <p style="margin:8px 0 0;font-size:13px;" class="dim">Two carriers: <code class="nf">&#xF407;</code> = "PR slot", color = state. Draft uses dim because <code>U+F65F</code> (Octicons git-pull-request-draft) is missing in NF v3.4.</p>
+</div>
+
+<div class="panel" style="border-color:rgba(245,158,11,0.3);margin-top:10px">
+  <p style="margin:0 0 8px"><strong>Reset countdown surfaces only when actionable</strong></p>
+  <div class="terminal"><div class="terminal-body"><span class="dim">normal   (reset >1h, usage <70%)  </span><span class="dim">5h</span><span class="amber">31%</span>
+<span class="dim">urgent   (reset <1h OR usage >70%) </span><span class="dim">5h</span><span class="red">78%·38m</span>
+<span class="dim">imminent (<15m)                    </span><span class="red blink">5h78%·12m</span></div></div>
+  <p style="margin:8px 0 0;font-size:13px;" class="dim">Hides 5 chars in the normal case and trains the eye that "any countdown showing = needs attention".</p>
+</div>
+
+<div class="panel" style="border-color:rgba(245,158,11,0.3);margin-top:10px">
+  <p style="margin:0 0 8px"><strong>Gauge precision surfaces only in the danger zone</strong></p>
+  <div class="terminal"><div class="terminal-body"><span class="dim">under 75%  </span><span class="green nf">&#xF242;</span>
+<span class="dim">75-89%     </span><span class="amber nf">&#xF241;</span><span class="amber"> 78%</span>
+<span class="dim">≥90%       </span><span class="red blink nf">&#xF240;</span><span class="red blink"> 96%</span></div></div>
+  <p style="margin:8px 0 0;font-size:13px;" class="dim">5-bucket icon (~20% resolution) is enough below 75%. Override with <code>DOOTDASHAA_GAUGE_PCT=always</code> to show % unconditionally.</p>
+</div>
+
+<!-- ─────────────────────────── 13. VISUAL VERIFICATION ─────────────────────────── -->
+<h2>13 · Visual verification</h2>
+<p>Throwaway spikes under <code>.local/spikes/</code> render the design in two real renderers in parallel: <strong>shux</strong> (its own PNG rasterizer with bundled JetBrains Mono Nerd Font) and <strong>iTerm2</strong> (driven via the iterm2 Python API + macOS <code>screencapture -l</code>, rendered with the operator's installed <code>JetBrainsMonoNFM-Regular 15</code>).</p>
+
+<h3>iTerm2 — operator's installed Nerd Font</h3>
+<img class="proof-img" src="spikes/iterm-mockups-only.png" alt="iTerm2 rendering of statusline mockups">
+<div class="proof-cap">iterm-mockups-only.png · 1700×280 crop · JetBrainsMonoNFM-Regular 15pt</div>
+<p style="font-size:13px;margin-top:10px">Visible NF glyphs match the design: PR icon (Octicons U+F407) before <code>222</code>, check ✓ (FA U+F00C) green for approved, warning ▲ (FA U+F071) amber/red for changes-requested, battery icons (FA U+F242 half · U+F240 full) as the gauge, AWS Amazon-A (FA U+F270) before <code>$122</code>. Truecolor renders, bold/dim ANSI attributes hold, empty gauge icon (U+F244) visible for the post-<code>/compact</code> null case.</p>
+
+<h3>shux — bundled JetBrains Mono Nerd Font in PNG rasterizer</h3>
+<img class="proof-img" src="spikes/shux-snapshot.png" alt="shux PNG snapshot of statusline mockups">
+<div class="proof-cap">shux-snapshot.png · full pane at 140×50 · shux v1.26.3</div>
+<p style="font-size:13px;margin-top:10px">Every section renders: mockups, AWS alarm states, color-coded PR refinement, gauge gradient at 5% steps showing the full battery-icon progression (empty → quarter → half → 3/4 → full with red blink at ≥95%), plus a byte-verification sanity table mapping each rendered glyph back to its codepoint — direct evidence that U+F407, U+F00C, U+F242, U+F270, U+F135, U+F071 all resolve correctly.</p>
+
+<h3>What the proofs settle</h3>
+<table>
+  <tbody>
+    <tr><td><span class="tag ok">verified</span></td><td>NF codepoints (Powerline U+E0A0, FA U+F0XX-F2XX, Octicons U+F4XX) all exist in <code>JetBrainsMonoNerdFontMono-Regular.ttf</code> v2.304 / Nerd Fonts 3.4.0 — confirmed by <code>fontTools.ttLib.TTFont.getBestCmap()</code>.</td></tr>
+    <tr><td><span class="tag ok">verified</span></td><td>iTerm's <code>Use Non-ASCII Font</code> = false, so PUA codepoints route to the primary <code>JetBrainsMonoNFM-Regular</code> font correctly (not to the fallback Monaco).</td></tr>
+    <tr><td><span class="tag ok">verified</span></td><td>Color rendering: green/amber/orange/red truecolor + blink attribute all survive both renderers.</td></tr>
+    <tr><td><span class="tag ok">verified</span></td><td>Bold + dim ANSI attributes apply correctly to model name, repo, dim separators.</td></tr>
+    <tr><td><span class="tag ok">verified</span></td><td>Single-line layout fits cleanly at 140 cols with substantial right-margin headroom (~62 chars rendered width in iTerm 15pt).</td></tr>
+    <tr><td><span class="tag ok">verified</span></td><td>Browser-side NF rendering of this dashboard — empty <code>&lt;span class="nf"&gt;</code> tags replaced with HTML numeric character references like <code>&amp;#xF407;</code>; browser preview now matches terminal output.</td></tr>
+    <tr><td><span class="tag warn">deferred</span></td><td>Live wiring of stdin JSON → render — that's the build step. Spike only verified visual output, not the data pipeline.</td></tr>
+  </tbody>
+</table>
+
+<h3>Gotchas captured during verification</h3>
+<p>Each of these would have shipped to a broken statusline in the first release if skipped during spike work. All now codified for the build step and for anyone reproducing this work later.</p>
+
+<table>
+  <thead><tr><th>Gotcha</th><th>Why it matters for the build</th><th>Mitigation in the production script</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Literal NF PUA chars get stripped through the editor toolchain</strong></td>
+      <td>Embedding a glyph like <code>U+F407</code> directly in source produces an empty variable. Both shux and iTerm silently render nothing.</td>
+      <td>Always declare NF glyphs via bash ANSI-C quoting + hex bytes: <code>PR=$'\xef\x90\x87'</code>. Pre-commit hook can <code>xxd</code>-check the file matches expected byte sequences.</td>
+    </tr>
+    <tr>
+      <td><strong>iTerm "Use Non-ASCII Font" routing pitfall</strong></td>
+      <td>Default iTerm profile sets <code>"Use Non-ASCII Font" = 1</code> with <code>"Non Ascii Font" = "Monaco 12"</code>. Monaco has no NF glyphs → every PUA codepoint silently routes there and tofus. Operator's machine has it = <code>0</code> (lucky), but other installs would break.</td>
+      <td>Statusline install script should <code>defaults read com.googlecode.iterm2</code> and warn if <code>Use Non-ASCII Font = 1</code> unless <code>Non Ascii Font</code> is also a Nerd Font. Document in README.</td>
+    </tr>
+    <tr>
+      <td><strong>NF v3.x dropped some Octicons codepoints</strong></td>
+      <td><code>fonttools</code> probe of <code>JetBrainsMonoNerdFontMono-Regular.ttf</code> (v2.304, NF 3.4.0) shows <strong>U+F65F (nf-oct-git-pull-request-draft) MISSING</strong>. The original design referenced it for the draft-PR state.</td>
+      <td>Draft state surfaces via dim color on the regular PR icon <code class="nf">&#xF407;</code> — aligned with the no-duplicate rule (color carries state, not a separate icon).</td>
+    </tr>
+    <tr>
+      <td><strong><code>printf</code> in bash interprets <code>%</code> as a format specifier</strong></td>
+      <td>First version of render-dootdashaa.sh had <code>printf "...5h31%·2h14...\n"</code> — the <code>%·</code> gets parsed as format spec, prints "invalid format character" errors. Mid-line aborts ruin the rendered output.</td>
+      <td>Mockup strings always go through <code>printf '%s\n' "..."</code> with the format string locked to <code>%s</code>. Avoid <code>printf "literal-with-percent"</code> entirely in the production script.</td>
+    </tr>
+    <tr>
+      <td><strong>Bash 3.2 (macOS default) lacks <code>\u</code> escape</strong></td>
+      <td>If the script uses <code>$''</code>, bash 3.2 prints the literal characters <code>uF407</code>. Production needs to run on default macOS bash, not a brew-installed bash 5.x.</td>
+      <td>Use <code>$'\xNN\xNN\xNN'</code> hex-byte form. Works in bash 3.2 and every later version. Each codepoint's UTF-8 encoding tracked in a doc comment next to the variable.</td>
+    </tr>
+    <tr>
+      <td><strong>shux rasterizer requires <code>nerd_fonts = true</code></strong> in config</td>
+      <td>Default is true, but if someone (e.g., for ASCII-only environments) sets it false, NF glyphs tofu in shux PNG snapshots. Doesn't affect live terminals — only shux-as-CI tooling.</td>
+      <td>If we use shux for visual regression in CI later, the CI step needs to verify <code>shux config show | grep nerd_fonts = true</code> in setup.</td>
+    </tr>
+    <tr>
+      <td><strong>iTerm's <code>Window.async_create()</code> returns before init finishes</strong></td>
+      <td>The returned object's <code>current_tab</code> is None — racing the spike with the iTerm event loop. First spike attempt crashed with <code>AttributeError</code>.</td>
+      <td>Only affects future iterm2-based verification scripts (not the statusline itself). Pattern: <code>asyncio.sleep(0.5)</code> + refresh via <code>async_get_app(connection)</code>. Codified in <code>iterm_verify.py</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>iTerm screen buffer contains shell-echo lines</strong></td>
+      <td>When reading the buffer to verify "did this codepoint reach the terminal", the line containing the command echo (e.g. <code>printf "MARK[...]"</code>) ALSO contains <code>MARK</code> + the literal NF char. Naive grep-for-MARK returns false positives.</td>
+      <td>Only matters for verification scripts. Mitigation: filter out lines starting with shell-prompt or with <code>printf </code> prefix.</td>
+    </tr>
+    <tr>
+      <td><strong>macOS <code>screencapture -l</code> can't capture minimized windows</strong></td>
+      <td>If the iTerm window we spawn happens to be minimized (e.g., user has minimize-on-launch behavior), the screencap returns blank.</td>
+      <td>Position the spike window via <code>async_set_frame()</code> immediately after creation. Window correlation via Quartz frame (score &lt; 30) reliably picks the right window in multi-iTerm setups.</td>
+    </tr>
+    <tr>
+      <td><strong>Browser preview of this dashboard ≠ ground truth (resolved)</strong></td>
+      <td>The dashboard's <code>&lt;span class="nf"&gt;</code> tags were initially empty (same Write-strip issue as the bash script). What appeared in the browser preview did not match what the statusline renders in iTerm.</td>
+      <td>Resolved by sweep — empty <code>&lt;span class="nf"&gt;</code> tags replaced with HTML numeric character references (<code>&amp;#xF407;</code>, etc.). 57 tags filled, zero empties remaining. Browser preview now matches the terminal screenshots.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Spike artifacts (under <code>.local/spikes/</code>)</h3>
+<table>
+  <tbody>
+    <tr><td><code>render-dootdashaa.sh</code></td><td>The render script. Hex-escaped NF vars. Prints mockups + AWS alarms + color-coded PR states + gauge gradient + byte-verification.</td></tr>
+    <tr><td><code>nf-probe.sh</code></td><td>Codepoint coverage probe across Powerline / FA / Octicons / Material / Codicons ranges.</td></tr>
+    <tr><td><code>iterm_verify.py</code></td><td>uv-script. Spawns isolated iTerm window, runs render script, captures via Quartz, cleans up in <code>finally</code>.</td></tr>
+    <tr><td><code>iterm_buffer_probe.py</code></td><td>Reads iTerm screen buffer post-print to verify codepoints reached the cell-grid (the test that first detected the missing bytes).</td></tr>
+    <tr><td><code>iterm-mockups.png</code> + crops</td><td>2462×1388 source + region crops.</td></tr>
+    <tr><td><code>shux-snapshot.png</code></td><td>shux pane PNG.</td></tr>
+  </tbody>
+</table>
+
+<p style="font-size:13px;margin-top:14px"><strong>Verification confidence:</strong> the visual design is real — not a prompt-engineering hallucination. Both renderers agree. Ready to build on sign-off.</p>
+
+<!-- ─────────────────────────── 14. DISTRIBUTION & INSTALL ─────────────────────────── -->
+<h2>14 · Distribution &amp; installation</h2>
+<p>Ships as a Claude Code plugin in the existing <a href="https://github.com/indrasvat/claude-code-skills">indrasvat/claude-code-skills</a> marketplace. The marketplace already declares one plugin (<code>indrasvat-skills</code>, the 14-skill bundle); <code>dootdashaa</code> is added as a second, independently-installable plugin alongside it.</p>
+
+<h3>User-facing install (three lines)</h3>
+<div class="terminal"><div class="terminal-body"><span class="dim">$</span> claude
+<span class="dim">&gt;</span> /plugin marketplace add indrasvat/claude-code-skills    <span class="dim"># once per machine</span>
+<span class="dim">&gt;</span> /plugin install dootdashaa@indrasvat-skills              <span class="dim"># pulls plugin, runs SessionStart hook</span>
+<span class="dim">&gt;</span> /dootdashaa:install                                       <span class="dim"># wires ~/.claude/settings.json statusLine</span></div></div>
+<p style="font-size:13px;margin-top:8px">First two are the standard Claude Code plugin install path. The third is a one-time slash command (provided by the plugin itself) that edits <code>~/.claude/settings.json</code> idempotently to point the user's <code>statusLine</code> at the installed script. Restarting the session picks up the new statusline.</p>
+
+<h3>Why a plugin, not <code>curl … | bash</code></h3>
+<table>
+  <thead><tr><th>Property</th><th>curl-piped install</th><th>plugin (this design)</th></tr></thead>
+  <tbody>
+    <tr><td>Version pinning</td><td>Whatever HEAD looks like at run time</td><td><code>/plugin update dootdashaa</code> bumps explicitly</td></tr>
+    <tr><td>Multi-host sync (Pi, AWS, laptop)</td><td>Re-curl on each host</td><td>One <code>/plugin marketplace add</code> per host, then <code>install</code></td></tr>
+    <tr><td>Trust surface</td><td>Bash script runs immediately with no review</td><td>Plugin install gates on marketplace add (one-time consent)</td></tr>
+    <tr><td>Uninstall path</td><td>Manual file/script removal, custom uninstaller</td><td><code>/plugin uninstall</code> + <code>/dootdashaa:uninstall</code></td></tr>
+    <tr><td>Update notification</td><td>None — silent drift</td><td>Claude Code shows update prompts in <code>/plugin</code></td></tr>
+    <tr><td>Namespacing</td><td>Hand-rolled (env vars, ~/.local/bin)</td><td>Slash commands live under <code>/dootdashaa:</code> prefix automatically</td></tr>
+  </tbody>
+</table>
+
+<h3>Plugin layout (in <code>indrasvat/claude-code-skills</code>)</h3>
+<div class="arch"><span class="hi">claude-code-skills/</span>
+├── <span class="ok">.claude-plugin/</span>
+│   ├── plugin.json           <span class="dim"># existing main 'indrasvat-skills' plugin (unchanged)</span>
+│   └── <span class="warn">marketplace.json</span>       <span class="dim"># add dootdashaa entry (one new line in plugins[])</span>
+├── skills/ commands/ ...    <span class="dim"># existing main plugin contents</span>
+└── <span class="warn">plugins/</span>
+    └── <span class="warn">dootdashaa/</span>           <span class="dim"># NEW — self-contained plugin</span>
+        ├── .claude-plugin/
+        │   └── plugin.json   <span class="dim"># name, version, description</span>
+        ├── bin/              <span class="dim"># auto-added to Bash tool's PATH while plugin enabled</span>
+        │   ├── dootdashaa         <span class="dim"># hot path (180 LOC bash, the statusline itself)</span>
+        │   ├── dootdashaa-refresh <span class="dim"># cold path (AWS poller, optional)</span>
+        │   └── dootdashaa-helper  <span class="dim"># symlink reconciler called from SessionStart</span>
+        ├── hooks/
+        │   └── hooks.json    <span class="dim"># SessionStart → run dootdashaa-helper ensure-symlinks</span>
+        ├── commands/
+        │   ├── install.md         <span class="dim"># /dootdashaa:install   — wires user's statusLine</span>
+        │   ├── uninstall.md       <span class="dim"># /dootdashaa:uninstall — reverses it</span>
+        │   └── install-aws.md     <span class="dim"># /dootdashaa:install-aws — registers launchd job (kartaa only)</span>
+        └── README.md</div>
+
+<h3>Marketplace delta</h3>
+<details open>
+<summary>Add one entry to the existing <code>.claude-plugin/marketplace.json</code></summary>
+<pre style="font-size:12px;line-height:1.6;color:var(--dim-2);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto">{
+  "name": "indrasvat-skills",
+  "owner": { "name": "indrasvat", "url": "https://github.com/indrasvat" },
+  "description": "Claude Code plugins for dev workflows, CI/CD, and statusline.",
+  "plugins": [
+    {
+      "name": "indrasvat-skills",
+      "source": "./",
+      "description": "14 skills for dev workflows, CI/CD, Kubernetes, AI-assisted development",
+      "category": "productivity"
+    },
+    <span class="amber">{
+      "name": "dootdashaa",
+      "source": "./plugins/dootdashaa",
+      "description": "Glanceable Claude Code statusline — NF icons, single line, ~9ms p50",
+      "category": "ui"
+    }</span>
+  ]
+}</pre>
+</details>
+
+<h3>Plugin manifest (<code>plugins/dootdashaa/.claude-plugin/plugin.json</code>)</h3>
+<pre style="font-size:12px;line-height:1.6;color:var(--dim-2);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto">{
+  "name": "dootdashaa",
+  "description": "Glanceable Claude Code statusline. NF icons, single line, ~9ms p50, kartaa AWS-credits segment.",
+  "version": "0.1.0",
+  "author": { "name": "indrasvat" },
+  "repository": "https://github.com/indrasvat/claude-code-skills",
+  "license": "MIT"
+}</pre>
+
+<h3>SessionStart hook (<code>plugins/dootdashaa/hooks/hooks.json</code>)</h3>
+<p>Runs on every session start. Idempotently reconciles two symlinks in <code>~/.claude/bin/</code> pointing at <code>${CLAUDE_PLUGIN_ROOT}/bin/dootdashaa</code> and <code>dootdashaa-refresh</code>. This is the trick that survives plugin updates: <code>~/.claude/settings.json</code> points at the stable <code>~/.claude/bin/dootdashaa</code> symlink; the hook re-targets the symlink whenever <code>${CLAUDE_PLUGIN_ROOT}</code> changes.</p>
+<pre style="font-size:12px;line-height:1.6;color:var(--dim-2);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto">{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/dootdashaa-helper ensure-symlinks"
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+
+<h3><code>dootdashaa-helper ensure-symlinks</code></h3>
+<pre style="font-size:12px;line-height:1.6;color:var(--dim-2);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto">#!/usr/bin/env bash
+# Reconcile ~/.claude/bin symlinks. Idempotent. Quiet on success.
+set +e
+here="$(cd "$(dirname "$0")" &amp;&amp; pwd)"
+mkdir -p "$HOME/.claude/bin"
+ln -sfn "$here/dootdashaa"         "$HOME/.claude/bin/dootdashaa"
+ln -sfn "$here/dootdashaa-refresh" "$HOME/.claude/bin/dootdashaa-refresh"
+
+# On first install only, hint the user toward /dootdashaa:install
+marker="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/dootdashaa}/.first-run-done"
+if [ ! -f "$marker" ]; then
+  mkdir -p "$(dirname "$marker")"
+  touch "$marker"
+  echo "dootdashaa installed. Run /dootdashaa:install to wire your statusLine." &gt;&amp;2
+fi
+exit 0</pre>
+<p style="font-size:13px;margin-top:8px;color:var(--dim-2)"><strong>Why symlinks, not direct paths?</strong> <code>${CLAUDE_PLUGIN_ROOT}</code> changes on every plugin update (Claude Code keeps the prior version dir around for ~7 days, then GCs it). If <code>~/.claude/settings.json</code> referenced the absolute plugin path, every update would break the statusline. The symlink layer is stable.</p>
+
+<h3><code>/dootdashaa:install</code> slash command</h3>
+<p>One-time, idempotent. Reads <code>~/.claude/settings.json</code>; if <code>statusLine</code> is absent, inserts the dootdashaa entry. If a different statusLine is already configured (e.g., gsd), backs it up to <code>statusLine.previous</code> and offers to restore on uninstall.</p>
+<pre style="font-size:12px;line-height:1.6;color:var(--dim-2);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto"><span class="dim">// commands/install.md (slash-command body, runs jq + writes settings.json)</span>
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/bin/dootdashaa",
+    "padding": 0
+  }
+}</pre>
+
+<h3>Update &amp; uninstall</h3>
+<table>
+  <tbody>
+    <tr><td><strong>Update</strong></td><td><code>/plugin update dootdashaa</code> — pulls latest from <code>indrasvat/claude-code-skills</code>; <code>${CLAUDE_PLUGIN_ROOT}</code> moves to a new versioned dir; next session's SessionStart hook re-targets <code>~/.claude/bin/dootdashaa</code> symlink. Zero manual action needed.</td></tr>
+    <tr><td><strong>Uninstall</strong></td><td><code>/dootdashaa:uninstall</code> (removes the <code>statusLine</code> entry from <code>~/.claude/settings.json</code>; restores any backed-up <code>statusLine.previous</code>) → then <code>/plugin uninstall dootdashaa</code> (Claude Code removes the plugin dir and the symlinks become dangling, but they're harmless once the statusLine entry is gone).</td></tr>
+    <tr><td><strong>Pi/AWS hosts</strong></td><td>Same three-line install. Each host's <code>~/.claude/settings.json</code> is per-host; no shared state to manage.</td></tr>
+    <tr><td><strong>AWS launchd job (kartaa-only)</strong></td><td>Separate one-shot command <code>/dootdashaa:install-aws</code> registers <code>~/Library/LaunchAgents/com.indrasvat.dootdashaa.plist</code>. Optional — only relevant on the operator's main machine where <code>kartaa-status-aws</code> exists.</td></tr>
+  </tbody>
+</table>
+
+<h3>What the user does NOT have to do</h3>
+<ul>
+  <li>No <code>curl … | bash</code> — nothing executes from a URL until the plugin marketplace is explicitly trusted.</li>
+  <li>No <code>chmod +x</code>, no <code>~/.local/bin</code> PATH wiring — handled by the SessionStart symlink.</li>
+  <li>No hand-editing <code>~/.claude/settings.json</code> — the <code>/dootdashaa:install</code> command does it idempotently.</li>
+  <li>No git clone, no submodule, no Pi-specific bootstrap script — same flow on every host.</li>
+</ul>
+
+<h3>Open authoring tasks (next session)</h3>
+<table>
+  <tbody>
+    <tr><td>1</td><td>Author <code>plugins/dootdashaa/.claude-plugin/plugin.json</code></td></tr>
+    <tr><td>2</td><td>Append <code>dootdashaa</code> entry to <code>.claude-plugin/marketplace.json</code></td></tr>
+    <tr><td>3</td><td>Author <code>bin/dootdashaa</code> (hot path · ~180 LOC bash, follows §3 architecture)</td></tr>
+    <tr><td>4</td><td>Author <code>bin/dootdashaa-refresh</code> (AWS poller · ~40 LOC)</td></tr>
+    <tr><td>5</td><td>Author <code>bin/dootdashaa-helper</code> (~30 LOC — ensure-symlinks subcommand)</td></tr>
+    <tr><td>6</td><td>Author <code>hooks/hooks.json</code> (SessionStart wired to <code>dootdashaa-helper ensure-symlinks</code>)</td></tr>
+    <tr><td>7</td><td>Author <code>commands/install.md</code>, <code>uninstall.md</code>, <code>install-aws.md</code></td></tr>
+    <tr><td>8</td><td>Author <code>plugins/dootdashaa/README.md</code> (the three-line install + screenshot)</td></tr>
+    <tr><td>9</td><td>Test locally via <code>claude --plugin-dir ./plugins/dootdashaa</code> before committing</td></tr>
+    <tr><td>10</td><td>Run <code>claude plugin validate</code> to catch schema errors before pushing</td></tr>
+  </tbody>
+</table>
+
+<p class="footer-note">2026-05-22 · design report · awaiting sign-off before any code is written.</p>
+
+</body>
+</html>

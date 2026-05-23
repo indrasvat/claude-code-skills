@@ -15,7 +15,7 @@ Both share one `/plugin marketplace add` step (see [Installation](#installation)
 
 ### dootdashaa — statusline
 
-Glanceable, single-line. One carrier per signal (icon, text, or colour — never two). Zero emoji. Pre-computed git cache keeps the hot path under the 300ms Claude Code debounce. See [`plugins/dootdashaa/README.md`](plugins/dootdashaa/README.md) for env-var options and the install / uninstall command list.
+Glanceable, single-line. One carrier per signal (icon, text, or colour — never two). Zero emoji. Pre-computed git cache keeps the hot path under the 300ms Claude Code debounce. See [`plugins/dootdashaa/README.md`](plugins/dootdashaa/README.md) for env-var options and the install / uninstall command list; design report is at [`plugins/dootdashaa/docs/DESIGN.html`](plugins/dootdashaa/docs/DESIGN.html).
 
 ### Skills (14 total)
 

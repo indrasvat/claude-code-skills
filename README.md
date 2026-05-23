@@ -1,10 +1,21 @@
 # Claude Code Skills
 
-A collection of personal Claude Code skills for automating terminal tasks, driving TUIs, and enhancing AI-assisted development workflows.
+A marketplace of personal [Claude Code](https://claude.ai/code) plugins: 14 skills for AI-assisted dev workflows, plus `dootdashaa`, a glanceable statusline.
 
 ## 🎯 Overview
 
-This repository contains production-ready skills for [Claude Code](https://claude.ai/code), designed to extend Claude's capabilities with specialized domain knowledge and automation patterns.
+This repository is a Claude Code marketplace exposing two independently-installable plugins:
+
+| Plugin | Install command | What it adds |
+|---|---|---|
+| **indrasvat-skills** | `/plugin install indrasvat-skills@indrasvat-skills` | 14 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, iTerm2 automation, …) |
+| **dootdashaa** | `/plugin install dootdashaa@indrasvat-skills` | Single-line, Nerd-Font-icon statusline. `~9ms` p50 render budget. |
+
+Both share one `/plugin marketplace add` step (see [Installation](#installation)). Each can be installed, updated, and uninstalled on its own.
+
+### dootdashaa — statusline
+
+Glanceable, single-line. One carrier per signal (icon, text, or colour — never two). Zero emoji. Pre-computed git cache keeps the hot path under the 300ms Claude Code debounce. See [`plugins/dootdashaa/README.md`](plugins/dootdashaa/README.md) for env-var options and the install / uninstall command list.
 
 ### Skills (14 total)
 
@@ -94,16 +105,22 @@ Local AI code reviews via CodeRabbit CLI. Use sparingly—rate-limited to 1 revi
 
 ### Via Claude Code Plugin (Recommended)
 
-In Claude Code, run:
+Inside a `claude` session, register the marketplace once and install whichever plugins you want:
 
 ```
-/plugin marketplace add indrasvat/claude-code-skills
+/plugin marketplace add indrasvat/claude-code-skills    # once per machine
+
+# 14 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, ...)
 /plugin install indrasvat-skills@indrasvat-skills
+
+# Statusline
+/plugin install dootdashaa@indrasvat-skills
+/dootdashaa:install                                     # wires ~/.claude/settings.json statusLine
 ```
 
-The first command adds the repository as a plugin marketplace. The second installs the plugin (or use just `/plugin install` to open the interactive installer).
+The first command adds the repository as a plugin marketplace. Each `/plugin install` line picks one of the two plugins exposed by that marketplace. `/dootdashaa:install` is the one-time idempotent step that edits `~/.claude/settings.json` to point at the statusline binary; it backs up any existing `statusLine` entry so `/dootdashaa:uninstall` can restore it.
 
-Skills are automatically available based on context once installed.
+Skills from `indrasvat-skills` are available based on context. The dootdashaa statusline appears on the next session restart.
 
 ### For Development
 
@@ -217,12 +234,20 @@ export PATH="${PATH}:/path/to/claude-code-skills/bin"
 ```
 claude-code-skills/
 ├── .claude-plugin/
-│   └── plugin.json             # Plugin manifest (required)
-├── commands/                    # Slash commands (user-invocable)
+│   ├── plugin.json             # 'indrasvat-skills' plugin manifest
+│   └── marketplace.json        # marketplace exposing both plugins
+├── commands/                    # Slash commands for 'indrasvat-skills'
 │   ├── prd.md                  # /prd - Generate PRD
 │   ├── prd-status.md           # /prd-status - Check progress
 │   ├── prd-ralph.md            # /prd-ralph - Start True Ralph Loop
 │   └── prd-resume.md           # /prd-resume - Recover context
+├── plugins/
+│   └── dootdashaa/              # Statusline plugin (independent install)
+│       ├── .claude-plugin/plugin.json
+│       ├── bin/{dootdashaa,dootdashaa-refresh,dootdashaa-helper}
+│       ├── hooks/hooks.json     # SessionStart → ensure-symlinks
+│       ├── commands/            # /dootdashaa:{install,uninstall,install-aws}
+│       └── README.md
 ├── skills/                      # All skills (model-invoked)
 │   ├── ci-gate/SKILL.md        # Local CI checks
 │   ├── exec-plan/              # Execution planning

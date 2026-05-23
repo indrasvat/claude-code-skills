@@ -12,10 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        # actions/checkout v5.0.1 — pinned to a SHA so a flaky mutable-tag
+        # fetch can't silently break CI (we hit one on 2026-05-23 post-merge)
+        # and so unreviewed action changes can't land via @v4/@master.
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
       - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@master
+        # ludeeus/action-shellcheck v2.0.0 — pinned to SHA (was @master).
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38
         with:
           scandir: '.'
           severity: warning
@@ -26,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
       - name: Validate SKILL.md frontmatter
         run: |

@@ -12,6 +12,20 @@ O=$'\033[38;5;208m'; R=$'\033[31m'; C=$'\033[36m'
 BL=$'\033[5m'; X=$'\033[0m'
 if [ -n "${NO_COLOR:-}" ]; then B=; D=; G=; Y=; O=; R=; C=; BL=; X=; fi
 
+# ── Vivid accent palette (opt-in: DOOTDASHAA_ACCENT=vivid; 24-bit truecolor).
+# Brightens the signal colours and gives the model/repo/branch their own
+# accents. MCOL/RCOL default to the calm look (dim model, bold repo).
+MCOL="$D"; RCOL="$B"
+if [ "${DOOTDASHAA_ACCENT:-}" = "vivid" ] && [ -z "${NO_COLOR:-}" ]; then
+  MCOL=$'\033[38;2;245;194;88m'    # amber   — model
+  RCOL=$'\033[1;38;2;255;125;92m'  # coral   — repo (bold)
+  C=$'\033[38;2;214;198;134m'      # gold    — branch
+  G=$'\033[38;2;80;250;123m'       # green
+  Y=$'\033[38;2;240;215;90m'       # amber
+  O=$'\033[38;2;255;160;70m'       # orange
+  R=$'\033[38;2;255;90;110m'       # red
+fi
+
 # ── Nerd Font glyphs (raw UTF-8 hex; literal PUA chars get stripped) ────
 # Hot path only renders PR icon + battery family. Alarm glyphs (warn/pause/
 # rocket) live in the cold path because the aws.line is pre-rendered.
@@ -21,6 +35,8 @@ BQ=$'\xef\x89\x83'        # U+F243 nf-fa-battery-quarter
 BH=$'\xef\x89\x82'        # U+F242 nf-fa-battery-half
 B3=$'\xef\x89\x81'        # U+F241 nf-fa-battery-three-quarters
 BF=$'\xef\x89\x80'        # U+F240 nf-fa-battery-full
+BAR_F=$'\xe2\x96\xb0'     # U+25B0 ▰ filled block (DOOTDASHAA_GAUGE=bar)
+BAR_E=$'\xe2\x96\xb1'     # U+25B1 ▱ empty block  (DOOTDASHAA_GAUGE=bar)
 
 # ── Cache dir (sha1-hashed filenames, 0700) ─────────────────────────────
 CACHE_DIR="${TMPDIR:-/tmp}/dootdashaa"
@@ -87,7 +103,7 @@ case "$effort" in
   xhigh|extra_high|x-high) eff="${Y}·xh${X}" ;;
   max|maximum) eff="${Y}·mx${X}" ;;
 esac
-model_seg="${D}${mshort}${X}${eff}"
+model_seg="${MCOL}${mshort}${X}${eff}"
 
 # ── Repo identity ───────────────────────────────────────────────────────
 if [ -n "$repo_name" ]; then
@@ -97,7 +113,7 @@ else
   [ -z "$repo_label" ] && repo_label="?"
 fi
 [ -n "$worktree" ] && repo_label="${repo_label}·wt"
-repo_seg="${B}${repo_label}${X}"
+repo_seg="${RCOL}${repo_label}${X}"
 
 # ── Git status (5s mtime-keyed cache) ───────────────────────────────────
 branch=""; dirty=""; ahead=""; behind=""
@@ -169,7 +185,31 @@ fi
 show_pct=0
 [ "$ctx_int" -ge 75 ] && show_pct=1
 [ "${DOOTDASHAA_GAUGE_PCT:-}" = "always" ] && show_pct=1
-if [ "$show_pct" = "1" ] && [ "$ctx_int" -gt 0 ]; then
+if [ "${DOOTDASHAA_GAUGE:-}" = "bar" ] && [ "$ctx_int" -gt 0 ]; then
+  # Opt-in gradient bar. Width via DOOTDASHAA_GAUGE_WIDTH (4–20, default 8).
+  # One awk call builds the whole bar to hold the perf budget. Filled blocks
+  # ramp green→amber→red across position when vivid accent is on; otherwise
+  # the run uses the single threshold colour.
+  gw="${DOOTDASHAA_GAUGE_WIDTH:-8}"
+  case "$gw" in ''|*[!0-9]*) gw=8 ;; esac
+  [ "$gw" -lt 4 ] && gw=4
+  [ "$gw" -gt 20 ] && gw=20
+  grad=0
+  [ "${DOOTDASHAA_ACCENT:-}" = "vivid" ] && [ -z "${NO_COLOR:-}" ] && grad=1
+  gauge_seg=$(awk -v p="$ctx_int" -v w="$gw" -v grad="$grad" \
+    -v ccol="$ccol" -v dim="$D" -v x="$X" -v fb="$BAR_F" -v eb="$BAR_E" 'BEGIN{
+      f=int(p*w/100+0.5); if(f>w)f=w; if(f<1)f=1; out="";
+      for(i=0;i<w;i++){
+        if(i<f){
+          if(grad=="1"){ t=(w>1)?i/(w-1):0;
+            if(t<0.5){u=t*2; r=80+u*160; g=250-u*35; b=123-u*33}
+            else{u=(t-0.5)*2; r=240+u*15; g=215-u*125; b=90+u*20}
+            out=out sprintf("\033[38;2;%d;%d;%dm%s", r, g, b, fb)
+          } else { out=out ccol fb }
+        } else { out=out dim eb }
+      }
+      printf "%s%s %s%d%%%s", out, x, ccol, p, x }')
+elif [ "$show_pct" = "1" ] && [ "$ctx_int" -gt 0 ]; then
   gauge_seg="${ccol}${bat}${X} ${ccol}${ctx_int}%${X}"
 else
   gauge_seg="${ccol}${bat}${X}"

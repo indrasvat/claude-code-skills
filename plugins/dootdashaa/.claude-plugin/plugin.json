@@ -1,7 +1,7 @@
 {
   "name": "dootdashaa",
   "description": "Glanceable Claude Code statusline. Nerd Font icons, single line, ~9ms p50, optional per-repo AWS-credits segment.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "indrasvat"
   },

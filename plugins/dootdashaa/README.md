@@ -44,6 +44,9 @@ Hide-steady-state is the rule: $0 cost, clean+synced git, medium effort,
 | `DOOTDASHAA_AWS_REPO=owner/repo` | Append the AWS-credits segment when the active repo matches. Reads `$TMPDIR/dootdashaa/aws.line`. |
 | `DOOTDASHAA_AWS_CMD="…"` | Command the refresher runs to regenerate that line (any script that prints a pre-coloured ANSI fragment). |
 | `DOOTDASHAA_GAUGE_PCT=always` | Always show the context %, not only ≥75%. |
+| `DOOTDASHAA_GAUGE=bar` | Render the context gauge as a colour-banded gradient bar (`▰▱`) instead of the battery icon. |
+| `DOOTDASHAA_GAUGE_WIDTH=N` | Bar width in blocks, 4–20 (default 8). Only applies with `DOOTDASHAA_GAUGE=bar`. |
+| `DOOTDASHAA_ACCENT=vivid` | Warm 24-bit accent palette (amber model · coral repo · gold branch) plus brighter signal colours. Off by default. |
 | `NO_COLOR=1` | Disable ANSI colour entirely. |
 
 ## Optional AWS-segment refresher

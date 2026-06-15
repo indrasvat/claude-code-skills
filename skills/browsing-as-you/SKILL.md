@@ -52,7 +52,18 @@ scripts/chrome-agent.sh login           # OR sign in once in the bridge (stop fi
 | --- | --- | --- |
 | Normal cookie sites (GitHub, most SaaS, X) | ✅ survives restart | `seed` once |
 | DBSC (Google, YouTube) | live only — drops on restart | `login` once |
-| token-in-localStorage SPAs (Devin) | ❌ not covered | `login` once |
+| **localStorage / SSO SPAs (Cloudflare, Devin)** | ❌ **not covered — looks authed, renders sign-in** | **`login` once** |
+
+> **localStorage/SSO dashboards: prefer `login`, not `seed`.** Cloudflare and
+> similar SPAs keep part of their auth in localStorage or a device-bound SSO key
+> that cookie-only `seed` can't carry. The catch: `seed` reports success, cookies
+> *are* injected, and `location.href` still reads as authed — but the SPA quietly
+> renders its **sign-in screen** (no redirect, so a URL check is fooled). Don't
+> trust a URL heuristic; confirm with a DOM probe:
+> `cdp.py probe https://dash.cloudflare.com --front` → `login-wall |
+> likely-authed`. (`--front` matters: CF's dash is visibility-gated and renders
+> blank in a hidden tab, which reads as `unknown`.) A `login-wall` after `seed`
+> means: run `chrome-agent.sh login` for that site.
 
 `seed` is cookies-only and reads your real profile locally (nothing leaves the
 machine, nothing is written back). `login` creates the device key *inside* the
@@ -72,8 +83,17 @@ http://127.0.0.1:9222`; setup in `reference/integration.md`). Or `scripts/cdp.py
 | open background tab, wait for load | `cdp.py open <url> -w` → prints `targetId` |
 | open + foreground a visibility-gated SPA | `cdp.py open <url> --front -w` |
 | eval JS · screenshot · navigate | `cdp.py eval '<js>' -t <id>` · `shot out.png -t <id>` · `nav <url> -t <id>` |
+| **trusted click** (coords or selector) | `cdp.py click '#submit' -t <id>` · `click 240,180 -t <id>` |
+| **trusted type** (into focused / a selector) | `cdp.py type 'hello' -t <id>` · `type 'us-east' --into '[role=combobox]' --enter -t <id>` |
+| **trusted key** (Enter/Tab/Arrow…) | `cdp.py key ArrowDown -t <id>` · `key Enter -t <id>` |
+| **auth probe** (is it really logged in?) | `cdp.py probe <url> --front` → `login-wall \| likely-authed \| unknown` |
 | foreground · close · sweep blanks | `cdp.py front -t <id>` · `close <id>` · `gc` |
 | isolated context | `cdp.py ctx new` → `open <url> --context <id>` → `ctx close <id>` |
+
+Trusted verbs (`click`/`type`/`key`) use the CDP **Input** domain — real
+`isTrusted` events — so they drive react-select dropdowns, `role=combobox`
+widgets, and native checkboxes that ignore synthetic `eval`-dispatched events.
+`click`/`type --into` take a CSS selector (scrolled into view) or `x,y` coords.
 
 `--json` (before the subcommand) for machine-readable output. **Concurrency:**
 each agent owns its `targetId` and passes `-t`; set `CHROME_AGENT_STRICT=1` to
@@ -85,6 +105,10 @@ make `eval`/`nav` refuse an implicit tab. Full rules: `reference/integration.md`
   traffic" / interstitial is a STOP sign, not a retry trigger — back off and tell
   the user. Prefer official APIs for bulk work. A blank/stuck SPA is usually just
   a hidden background tab → `--front`, not bot detection.
+- **Trusted input is not for CAPTCHA.** `click`/`type`/`key` are for app forms,
+  not human-verification. `click` refuses any target inside a reCAPTCHA /
+  hCaptcha / Cloudflare Turnstile widget (exit 2) — solving a challenge stays a
+  human step. Don't try to coordinate-click around the guard.
 - **Dedicated profile, loopback only.** `seed` reads your real profile but never
   writes to it; the debug port binds to `127.0.0.1` — never expose it. `stop`/
   `kill`/`recover` only ever touch the bridge profile.

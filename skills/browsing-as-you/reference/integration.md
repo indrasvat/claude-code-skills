@@ -138,9 +138,12 @@ scripts/cdp.py --json seed --dry-run      # counts only, machine-readable
 
 ### What seed can and cannot carry
 
-- **Cookies only** — not localStorage/IndexedDB. SPAs that keep their session
-  token in localStorage (e.g. Devin) will still look logged out; use
-  `chrome-agent.sh login` for those.
+- **Cookies only** — not localStorage/IndexedDB, and not device-bound SSO keys.
+  SPAs that keep their session token in localStorage or behind a device-bound
+  single-sign-on (e.g. **Cloudflare dashboard**, Devin) will still hit a login
+  wall after `seed`, even though cookies were injected. Use `chrome-agent.sh
+  login` once for those — it creates the device key *inside* the bridge profile,
+  so they stay authed across restarts and reboots.
 - **DBSC (Device Bound Session Credentials).** Google and YouTube bind the
   session to a device key stored in the *source* profile. A seeded cookie
   authenticates for the current session, but on the next bridge restart Chrome
@@ -149,9 +152,55 @@ scripts/cdp.py --json seed --dry-run      # counts only, machine-readable
 - **Normal cookie sessions** (GitHub and most apps) seed durably and survive
   restarts.
 
-Verify after seeding: `scripts/cdp.py open https://<site> -w`, then
-`scripts/cdp.py eval "location.href" -t <id>` — an authed site should not bounce
-to its login page.
+### Verify with a DOM probe, not the URL
+
+A URL-only "loggedIn" check is **unreliable for SPAs**. `seed` reports success
+and injects cookies, but a localStorage/SSO app (Cloudflare) renders its sign-in
+screen *without redirecting* — so `location.href` still reads as authed and the
+agent only discovers the wall after trying to act. `scripts/cdp.py probe`
+inspects the DOM (visible password fields, sign-in text, login forms) instead:
+
+```bash
+scripts/cdp.py probe https://dash.cloudflare.com --front
+#   verdict: login-wall | likely-authed | unknown
+```
+
+- `login-wall` after `seed` → that site needs `chrome-agent.sh login` (its auth
+  isn't in cookies). This is the common Cloudflare case.
+- `--front` matters for visibility-gated SPAs: the Cloudflare dash renders blank
+  in a hidden background tab, which the probe reports as `unknown`. Front it so
+  the SPA hydrates, then the verdict is real. (`probe` already waits for load and
+  re-checks for a few seconds while the SPA hydrates.)
+- `unknown` = the probe couldn't find sign-in markers *or* confirm content —
+  treat it as "look closer" (screenshot, check a known authed-only selector),
+  not as a pass.
+
+## Trusted input (click / type / key)
+
+Synthetic `MouseEvent`/`KeyboardEvent` dispatched through `eval` are
+`isTrusted: false`; modern widgets — react-select dropdowns, `role=combobox`
+inputs, native checkboxes — ignore them. The Input verbs use the CDP **Input**
+domain, which emits OS-level trusted events that drive these widgets exactly like
+a human:
+
+```bash
+cdp.py click '#submit' -t <id>              # selector: scrolled into view, center-clicked
+cdp.py click 240,180 -t <id>                # or raw viewport x,y
+cdp.py type 'us-east-1' --into '[role=combobox]' --enter -t <id>   # focus, insertText, Enter
+cdp.py type 'hello' -t <id>                 # into whatever is focused
+cdp.py key ArrowDown -t <id>                # Enter Tab Escape Backspace Delete Arrow* Home End PageUp PageDown Space
+```
+
+- `click`/`type --into` accept a CSS selector (scrolled to center first) or `x,y`
+  coords. react-select options are often portaled/virtualized — typing to filter
+  then `key ArrowDown` + `key Enter` (or `type --enter`) is more robust than
+  hunting for the option's coordinates.
+- **CAPTCHA is a hard stop.** `click` refuses any target inside a reCAPTCHA /
+  hCaptcha / Cloudflare Turnstile widget and exits 2. Human-verification stays a
+  human step — don't reach for coordinate-clicks to bypass the guard; back off
+  and tell the user.
+- Visibility-gated SPAs (Cloudflare dash) must be `--front`ed before driving
+  them, or the elements you click won't have rendered.
 
 ## Failure modes and fixes
 
@@ -167,7 +216,10 @@ to its login page.
 | Stale `SingletonLock`, won't start | previous crash | `start` clears it automatically when no live process owns the profile |
 | Process alive but all calls hang/time out | browser **wedged** | `chrome-agent.sh health` shows `wedged` (exit 4); run `chrome-agent.sh recover` |
 | Concurrent agents stomping each other's tab | sharing one tab | each agent uses its own `targetId` (`-t`); set `CHROME_AGENT_STRICT=1` to enforce |
-| `seed` runs but a site is still logged out | token in localStorage, not cookies | use `chrome-agent.sh login` for that site (seed is cookies-only) |
+| `seed` runs but a site is still logged out | token in localStorage / device-bound SSO, not cookies (Cloudflare, Devin) | `chrome-agent.sh login` once for that site; confirm with `cdp.py probe <url> --front` |
+| `seed` looked fine but the SPA shows its sign-in screen | URL didn't redirect, so a `location.href` check read as authed | don't trust the URL — `cdp.py probe <url> --front` reads the DOM (`login-wall` ⇒ needs `login`) |
+| Synthetic click/type doesn't open a dropdown / check a box | `eval`-dispatched events are `isTrusted:false` | use the Input verbs: `cdp.py click`/`type`/`key` (trusted events) |
+| `cdp.py click` exits 2 on a "verify you're human" box | target is a CAPTCHA/Turnstile widget (guarded) | this is intended — solving the challenge is a human step; stop and hand off |
 | Google/YouTube authed after `seed` but logged out after a restart | DBSC device-bound session | re-run `seed` each session, or `login` once into the bridge (durable — the device key is created in this profile) |
 | `seed` errors reading the keychain | login keychain locked / access denied | unlock the keychain and approve the `security` access prompt, then retry |
 | Authed (cookies present) but a dashboard renders blank/loader forever | tab is a background tab, `visibilityState: hidden`; some SPAs (e.g. Cloudflare dash) won't render until visible | foreground it: `cdp.py open <url> --front` or `cdp.py front -t <id>` (not bot detection; don't loop-reload) |

@@ -32,6 +32,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import math
 import os
 import platform
 import secrets
@@ -309,7 +310,13 @@ def open_tab(ctx: click.Context, url: str, wait: bool, timeout: float,
             page = await _resolve_page(o["host"], o["port"], target_id, o["strict"], log)
             await _cdp(page["webSocketDebuggerUrl"], "Page.bringToFront", {}, log)
         if wait:
-            await _wait_ready(o["host"], o["port"], target_id, timeout, o["strict"], log)
+            # A freshly created tab is at about:blank (readyState already
+            # "complete"); wait for it to navigate to the requested URL first —
+            # unless about:blank IS the requested URL (else we'd wait out the
+            # whole timeout for a page that is already loaded).
+            blank_target = url.strip().startswith("about:blank")
+            await _wait_ready(o["host"], o["port"], target_id, timeout, o["strict"], log,
+                              await_nav=not blank_target)
         if o["json"]:
             _emit({"targetId": target_id, "browserContextId": context_id_local}, True)
         elif isolated:
@@ -333,14 +340,25 @@ def front(ctx: click.Context, target: str | None) -> None:
     _run(ctx, run, "front")
 
 
-async def _wait_ready(host: str, port: int, target_id: str, timeout: float, strict: bool, log: Any) -> None:
+async def _wait_ready(host: str, port: int, target_id: str, timeout: float, strict: bool,
+                      log: Any, await_nav: bool = False) -> None:
+    # await_nav: a freshly created tab is at about:blank with readyState already
+    # "complete", so a naive check returns before the real page loads. When set,
+    # also require the URL to have left about:blank before declaring ready.
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         page = await _resolve_page(host, port, target_id, strict, log)
-        out = await _cdp(page["webSocketDebuggerUrl"], "Runtime.evaluate",
-                         {"expression": "document.readyState", "returnByValue": True}, log)
-        if out.get("result", {}).get("value") == "complete":
-            return
+        try:
+            out = await _cdp(page["webSocketDebuggerUrl"], "Runtime.evaluate",
+                             {"expression": "[document.readyState, location.href]", "returnByValue": True}, log)
+            state, href = out.get("result", {}).get("value", [None, None])
+            blank = (not href) or href == "about:blank"
+            if state == "complete" and not (await_nav and blank):
+                return
+        except RuntimeError as exc:
+            # Mid-navigation the execution context is torn down ("Execution
+            # context was destroyed"); that's transient — keep polling.
+            log.debug(f"wait poll transient error: {exc!r}")
         await asyncio.sleep(READY_POLL_S)
     log.warning(f"wait timed out after {timeout}s for {target_id}")
     click.echo(f"warning: timed out after {timeout}s waiting for load", err=True)
@@ -371,15 +389,8 @@ def evaluate(ctx: click.Context, expression: str, target: str | None) -> None:
     """Evaluate a JS expression in a tab; print the returned value."""
     async def run(o: Any, log: Any) -> None:
         page = await _resolve_page(o["host"], o["port"], target, o["strict"], log)
-        out = await _cdp(page["webSocketDebuggerUrl"], "Runtime.evaluate",
-                         {"expression": expression, "returnByValue": True, "awaitPromise": True}, log)
-        if "exceptionDetails" in out:
-            text = out["exceptionDetails"].get("exception", {}).get("description") \
-                or out["exceptionDetails"].get("text", "eval failed")
-            log.error(f"eval exception: {text}")
-            click.echo(f"error: {text}", err=True)
-            raise SystemExit(2)
-        _emit(out.get("result", {}).get("value"), o["json"])
+        value = await _eval_value(page["webSocketDebuggerUrl"], expression, log)
+        _emit(value, o["json"])
     _run(ctx, run, "eval")
 
 
@@ -404,6 +415,347 @@ def shot(ctx: click.Context, path: str, target: str | None, full_page: bool) -> 
             fh.write(base64.b64decode(out["data"]))
         _emit({"saved": path} if o["json"] else f"saved {path}", o["json"])
     _run(ctx, run, "shot")
+
+
+# --- trusted input (CDP Input domain) ----------------------------------------
+# Synthetic MouseEvent/KeyboardEvent dispatched via Runtime.evaluate are
+# `isTrusted: false`; react-select dropdowns, role=combobox widgets, and native
+# checkboxes ignore them. The CDP Input domain produces OS-level *trusted* events
+# that drive these widgets exactly like a human, so agents don't hand-roll a
+# bespoke websocket helper per task.
+#
+# CAPTCHA / human-verification (reCAPTCHA, hCaptcha, Cloudflare Turnstile) is a
+# deliberate STOP: these verbs refuse selectors that resolve inside such a widget
+# (see _RESOLVE_JS `captcha` flag). Solving a challenge stays a human step.
+
+# Resolve a selector to a trusted click point: scroll it into view, return the
+# bounding-box center (CSS px, viewport-relative — what Input.dispatchMouseEvent
+# wants) plus a flag for whether it sits inside a known CAPTCHA widget.
+_CAPTCHA_SEL = (
+    ".cf-turnstile, [data-sitekey], "
+    'iframe[src*="turnstile"], iframe[src*="recaptcha"], '
+    'iframe[src*="hcaptcha"], iframe[title*="reCAPTCHA"], iframe[title*="hCaptcha"]'
+)
+_CAPTCHA_MSG = ("error: target is inside a CAPTCHA / human-verification widget "
+                "(reCAPTCHA/hCaptcha/Turnstile) — that is a human step, not an "
+                "agent one. Stop and hand off to the user.")
+# Scope the CAPTCHA guard to the ACTUAL target (the element, or the one under the
+# click point), not the whole page — a page that merely embeds a Turnstile widget
+# elsewhere must still allow clicking its own form fields.
+_RESOLVE_JS = """
+(() => {{
+  const el = document.querySelector({sel});
+  if (!el) return {{found: false}};
+  el.scrollIntoView({{block: 'center', inline: 'center', behavior: 'instant'}});
+  const r = el.getBoundingClientRect();
+  return {{found: true, x: r.left + r.width / 2, y: r.top + r.height / 2,
+           w: r.width, h: r.height, captcha: !!el.closest({cap})}};
+}})()
+"""
+# For coordinate clicks (which skip the selector path), resolve the element under
+# the point and check whether IT sits inside a CAPTCHA widget.
+_POINT_CAPTCHA_JS = """
+(() => {{
+  const el = document.elementFromPoint({x}, {y});
+  return !!(el && el.closest({cap}));
+}})()
+"""
+# `type` (without --into) and `key` act on whatever is already focused, so guard
+# the focused element too — otherwise a CAPTCHA field focused earlier could still
+# receive trusted input. A cross-origin CAPTCHA iframe surfaces as the <iframe>
+# host element, which the selector matches.
+_ACTIVE_CAPTCHA_JS = """
+(() => {{
+  const el = document.activeElement;
+  return !!(el && el.closest({cap}));
+}})()
+"""
+
+
+async def _eval_value(ws: str, expr: str, log: Any) -> Any:
+    out = await _cdp(ws, "Runtime.evaluate",
+                     {"expression": expr, "returnByValue": True, "awaitPromise": True}, log)
+    if "exceptionDetails" in out:
+        text = out["exceptionDetails"].get("exception", {}).get("description") \
+            or out["exceptionDetails"].get("text", "eval failed")
+        log.error(f"eval exception: {text}")
+        click.echo(f"error: {text}", err=True)
+        raise SystemExit(2)
+    return out.get("result", {}).get("value")
+
+
+def _parse_xy(spec: str) -> tuple[float, float] | None:
+    """Parse 'x,y' (ints or floats) into coords, or None if it's a selector."""
+    parts = spec.split(",")
+    if len(parts) != 2:
+        return None
+    try:
+        x, y = float(parts[0].strip()), float(parts[1].strip())
+    except ValueError:
+        return None
+    if not (math.isfinite(x) and math.isfinite(y)):
+        return None  # NaN/inf are not real coordinates; treat as a (bad) selector
+    return x, y
+
+
+async def _resolve_point(ws: str, spec: str, log: Any) -> tuple[float, float]:
+    """Turn a 'x,y' or CSS-selector spec into viewport coords, refusing CAPTCHAs."""
+    cap = json.dumps(_CAPTCHA_SEL)
+    xy = _parse_xy(spec)
+    if xy is not None:
+        x, y = xy
+    else:
+        info = await _eval_value(ws, _RESOLVE_JS.format(sel=json.dumps(spec), cap=cap), log)
+        if not info or not info.get("found"):
+            click.echo(f"error: selector not found: {spec}", err=True)
+            raise SystemExit(2)
+        if info.get("captcha"):  # element (or an ancestor) is a CAPTCHA widget
+            click.echo(_CAPTCHA_MSG, err=True)
+            raise SystemExit(2)
+        if not info.get("w") or not info.get("h"):
+            click.echo(f"error: selector {spec!r} has zero size (hidden?); cannot click", err=True)
+            raise SystemExit(2)
+        x, y = info["x"], info["y"]
+    return x, y
+
+
+async def _guard_active(ws: str, log: Any) -> None:
+    """Refuse trusted input when the focused element is inside a CAPTCHA widget."""
+    if await _eval_value(ws, _ACTIVE_CAPTCHA_JS.format(cap=json.dumps(_CAPTCHA_SEL)), log):
+        click.echo(_CAPTCHA_MSG, err=True)
+        raise SystemExit(2)
+
+
+async def _click_point(ws: str, x: float, y: float, log: Any) -> None:
+    await _cdp(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y}, log)
+    # Hit-test AFTER the hover settles and immediately before the press, so a
+    # CAPTCHA overlay revealed on hover (or one the coords/selector resolved onto)
+    # is caught with no TOCTOU gap before the actual click lands.
+    if await _eval_value(ws, _POINT_CAPTCHA_JS.format(x=x, y=y, cap=json.dumps(_CAPTCHA_SEL)), log):
+        click.echo(_CAPTCHA_MSG, err=True)
+        raise SystemExit(2)
+    base = {"x": x, "y": y, "button": "left", "clickCount": 1}
+    await _cdp(ws, "Input.dispatchMouseEvent", {**base, "type": "mousePressed"}, log)
+    await _cdp(ws, "Input.dispatchMouseEvent", {**base, "type": "mouseReleased"}, log)
+
+
+# Trusted keystrokes for non-text keys. text-producing keys (Enter, Tab, Space)
+# carry `text` so frameworks that read it on keydown fire correctly.
+_KEYS: dict[str, dict[str, Any]] = {
+    "Enter": {"key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13, "text": "\r"},
+    "Tab": {"key": "Tab", "code": "Tab", "windowsVirtualKeyCode": 9, "text": "\t"},
+    "Space": {"key": " ", "code": "Space", "windowsVirtualKeyCode": 32, "text": " "},
+    "Escape": {"key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27},
+    "Backspace": {"key": "Backspace", "code": "Backspace", "windowsVirtualKeyCode": 8},
+    "Delete": {"key": "Delete", "code": "Delete", "windowsVirtualKeyCode": 46},
+    "ArrowUp": {"key": "ArrowUp", "code": "ArrowUp", "windowsVirtualKeyCode": 38},
+    "ArrowDown": {"key": "ArrowDown", "code": "ArrowDown", "windowsVirtualKeyCode": 40},
+    "ArrowLeft": {"key": "ArrowLeft", "code": "ArrowLeft", "windowsVirtualKeyCode": 37},
+    "ArrowRight": {"key": "ArrowRight", "code": "ArrowRight", "windowsVirtualKeyCode": 39},
+    "Home": {"key": "Home", "code": "Home", "windowsVirtualKeyCode": 36},
+    "End": {"key": "End", "code": "End", "windowsVirtualKeyCode": 35},
+    "PageUp": {"key": "PageUp", "code": "PageUp", "windowsVirtualKeyCode": 33},
+    "PageDown": {"key": "PageDown", "code": "PageDown", "windowsVirtualKeyCode": 34},
+}
+
+
+async def _press_key(ws: str, name: str, log: Any) -> None:
+    spec = _KEYS.get(name)
+    if spec is None:
+        keys = ", ".join(sorted(_KEYS))
+        click.echo(f"error: unknown key {name!r}; known: {keys}", err=True)
+        raise SystemExit(2)
+    await _cdp(ws, "Input.dispatchKeyEvent", {"type": "keyDown", **spec}, log)
+    await _cdp(ws, "Input.dispatchKeyEvent", {"type": "keyUp", **spec}, log)
+
+
+@cli.command(name="click")
+@click.argument("target_spec")
+@click.option("-t", "--target", default=None, help="Target id (default: most recent tab unless --strict).")
+@click.pass_context
+def click_cmd(ctx: click.Context, target_spec: str, target: str | None) -> None:
+    """Trusted click at 'x,y' coords or a CSS selector (scrolls it into view).
+
+    Drives react-select/combobox/checkbox widgets that ignore synthetic events.
+    Refuses anything inside a CAPTCHA/Turnstile widget — that stays a human step.
+    """
+    async def run(o: Any, log: Any) -> None:
+        page = await _resolve_page(o["host"], o["port"], target, o["strict"], log)
+        ws = page["webSocketDebuggerUrl"]
+        x, y = await _resolve_point(ws, target_spec, log)
+        await _click_point(ws, x, y, log)
+        _emit({"clicked": {"x": x, "y": y}, "target": page["id"]} if o["json"]
+              else f"clicked ({x:.0f},{y:.0f})", o["json"])
+    _run(ctx, run, "click")
+
+
+@cli.command(name="type")
+@click.argument("text")
+@click.option("-t", "--target", default=None, help="Target id (default: most recent tab unless --strict).")
+@click.option("--into", "into", default=None, help="CSS selector to trusted-click (focus) before typing.")
+@click.option("--enter", is_flag=True, help="Press Enter after typing (submit / select option).")
+@click.pass_context
+def type_cmd(ctx: click.Context, text: str, target: str | None, into: str | None, enter: bool) -> None:
+    """Trusted-type TEXT into the focused element (or --into <selector> first).
+
+    Uses Input.insertText (trusted), so it drives inputs, contenteditable, and
+    react-select search boxes. Pair with --enter to commit a combobox option.
+    """
+    async def run(o: Any, log: Any) -> None:
+        page = await _resolve_page(o["host"], o["port"], target, o["strict"], log)
+        ws = page["webSocketDebuggerUrl"]
+        if into:
+            x, y = await _resolve_point(ws, into, log)
+            await _click_point(ws, x, y, log)
+        await _guard_active(ws, log)  # don't type into a focused CAPTCHA field
+        await _cdp(ws, "Input.insertText", {"text": text}, log)
+        if enter:
+            await _guard_active(ws, log)  # re-check: insert may have moved focus
+            await _press_key(ws, "Enter", log)
+        _emit({"typed": len(text), "target": page["id"]} if o["json"]
+              else f"typed {len(text)} chars", o["json"])
+    _run(ctx, run, "type")
+
+
+@cli.command(name="key")
+@click.argument("name")
+@click.option("-t", "--target", default=None, help="Target id (default: most recent tab unless --strict).")
+@click.pass_context
+def key_cmd(ctx: click.Context, name: str, target: str | None) -> None:
+    """Press one trusted key (Enter, Tab, Escape, ArrowDown, ...). See --help list."""
+    async def run(o: Any, log: Any) -> None:
+        page = await _resolve_page(o["host"], o["port"], target, o["strict"], log)
+        ws = page["webSocketDebuggerUrl"]
+        await _guard_active(ws, log)  # don't send keystrokes into a focused CAPTCHA
+        await _press_key(ws, name, log)
+        _emit({"key": name, "target": page["id"]} if o["json"] else f"pressed {name}", o["json"])
+    _run(ctx, run, "key")
+
+
+# --- auth probe ---------------------------------------------------------------
+# A URL-only "loggedIn" check is unreliable for SPAs: cookie-only `seed` can't
+# carry localStorage/device-bound (SSO) auth, yet the SPA renders its sign-in
+# screen WITHOUT redirecting — so location.href still looks authed. This probes
+# the DOM for sign-in markers instead, turning a silent false-positive into a
+# clear "login-wall" verdict that tells the agent to use `chrome-agent.sh login`.
+_PROBE_JS = r"""
+(() => {
+  const vis = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    const s = getComputedStyle(el);
+    return s.visibility !== 'hidden' && s.display !== 'none';
+  };
+  const pw = [...document.querySelectorAll('input[type=password]')].some(vis);
+  // A visible email/username field is the other half of an auth screen (email-
+  // first SSO has no password field yet).
+  const authInput = [...document.querySelectorAll(
+    'input[type=email], input[autocomplete=username], input[autocomplete=email], '
+    + 'input[name*=email i], input[id*=email i], input[name*=user i]')].some(vis);
+  const text = (document.body ? document.body.innerText : '').slice(0, 4000);
+  // Weak signal: the word appears anywhere (also matches "Login history" on an
+  // authed page, so it can't decide a verdict on its own).
+  const wallText = /\b(sign[ -]?in|log[ -]?in|continue with (google|github|apple|microsoft|sso)|single sign-on)\b/i.test(text);
+  const ctaText = [...document.querySelectorAll('h1, h2, button, [type=submit], [role=button], a[href]')]
+    .filter(vis).map(el => ((el.innerText || el.value || '')).trim());
+  // Strongest CTA: an OAuth/SSO sign-in button is unambiguous on its own — these
+  // never appear on an authed dashboard, so they flag a wall even on a content-
+  // heavy OAuth screen (legal/marketing copy) that lacks an email field or form.
+  const oauthRe = /^(?:continue with (?:google|github|apple|microsoft|sso|saml|okta|email)|(?:sign|log)[ -]?in with (?:google|github|apple|microsoft|sso|saml|okta)|single sign-on|use sso)\b/i;
+  const oauthCta = ctaText.some(t => oauthRe.test(t));
+  // Generic sign-in CTA. Anchored and continuation-gated so nav labels like
+  // "Login history" don't match (only "Sign in", "Log in", "Sign in to X").
+  const ctaRe = /^(?:sign[ -]?in|log[ -]?in|log on)(?: to\b| with\b|$)/i;
+  const cta = oauthCta || ctaText.some(t => ctaRe.test(t));
+  const formAction = [...document.querySelectorAll('form[action]')]
+    .some(f => /login|signin|sso|auth/i.test(f.getAttribute('action') || ''));
+  const urlHint = /\b(login|signin|sign-in|sso|auth|account\/login)\b/i.test(location.href);
+  // login-wall when: a password field is visible; OR an OAuth/SSO button (strong
+  // on its own); OR a generic sign-in CTA backed by an auth input / login form /
+  // login URL / a sparse (sign-in-only) page; OR an auth input on a page that
+  // reads as sign-in by text or URL.
+  const wall = pw || oauthCta
+    || (cta && (authInput || formAction || urlHint || text.length < 600))
+    || (authInput && (wallText || urlHint));
+  const verdict = wall ? 'login-wall' : (text.length > 0 ? 'likely-authed' : 'unknown');
+  return {url: location.href, title: document.title, ready: document.readyState,
+          hasPassword: pw, authInput, signInText: wallText, signInCta: cta,
+          oauthCta, formAction, urlHint, verdict};
+})()
+"""
+
+
+@cli.command(name="probe")
+@click.argument("url", required=False)
+@click.option("-t", "--target", default=None, help="Probe an existing tab instead of opening URL.")
+@click.option("--timeout", default=20.0, show_default=True, type=float, help="Max seconds to await load.")
+@click.option("--front", is_flag=True, help="Foreground first (visibility-gated SPAs render blank while hidden).")
+@click.option("--keep", is_flag=True, help="Leave the opened tab open (default: close it after probing).")
+@click.pass_context
+def probe(ctx: click.Context, url: str | None, target: str | None, timeout: float,
+          front: bool, keep: bool) -> None:
+    """Check whether a site is really logged in (DOM sign-in markers, not URL).
+
+    Cookie-only `seed` can't carry localStorage/SSO auth, yet the SPA shows its
+    sign-in screen without redirecting — so a URL check reads as authed. This
+    inspects the DOM. Verdict: login-wall | likely-authed | unknown. A login-wall
+    after seed means: use `chrome-agent.sh login` for that site.
+    """
+    async def run(o: Any, log: Any) -> None:
+        opened = None
+        if url:
+            bws = await _browser_ws(o["host"], o["port"], log)
+            res = await _cdp(bws, "Target.createTarget", {"url": url, "background": True}, log)
+            opened = res["targetId"]
+            tgt = opened
+        elif target:
+            tgt = target
+        else:
+            click.echo("error: pass a URL to open, or -t <targetId> to probe an open tab", err=True)
+            raise SystemExit(2)
+        try:
+            if front:
+                p = await _resolve_page(o["host"], o["port"], tgt, o["strict"], log)
+                await _cdp(p["webSocketDebuggerUrl"], "Page.bringToFront", {}, log)
+            blank_target = bool(url) and url.strip().startswith("about:blank")
+            await _wait_ready(o["host"], o["port"], tgt, timeout, o["strict"], log,
+                              await_nav=bool(opened) and not blank_target)
+            page = await _resolve_page(o["host"], o["port"], tgt, o["strict"], log)
+            # SPAs hydrate after readyState=complete; an immediate check sees an
+            # empty body and reads "unknown". Re-probe briefly until the verdict
+            # is decisive (login-wall/likely-authed) or a short settle budget ends.
+            info = await _eval_value(page["webSocketDebuggerUrl"], _PROBE_JS, log)
+            settle = time.monotonic() + min(8.0, timeout)
+            while info.get("verdict") == "unknown" and time.monotonic() < settle:
+                await asyncio.sleep(0.5)
+                try:
+                    info = await _eval_value(page["webSocketDebuggerUrl"], _PROBE_JS, log)
+                except RuntimeError as exc:
+                    # A client-side route change tears down the context mid-settle;
+                    # keep the last verdict and retry on the next tick.
+                    log.debug(f"probe settle transient error: {exc!r}")
+        finally:
+            # Never let cleanup mask the real failure from the try block.
+            if opened and not keep:
+                try:
+                    bws = await _browser_ws(o["host"], o["port"], log)
+                    await _cdp(bws, "Target.closeTarget", {"targetId": opened}, log)
+                except (RuntimeError, SystemExit) as exc:
+                    log.warning(f"probe could not close target {opened}: {exc!r}")
+        log.info(f"probe verdict={info.get('verdict')} url={info.get('url')}")
+        if o["json"]:
+            _emit({**info, "targetId": tgt if (keep or not opened) else None}, True)
+        else:
+            click.echo(f"verdict    {info.get('verdict')}")
+            click.echo(f"url        {info.get('url')}")
+            click.echo(f"signals    password={info.get('hasPassword')} "
+                       f"authInput={info.get('authInput')} signInCta={info.get('signInCta')} "
+                       f"urlHint={info.get('urlHint')}")
+            if info.get("verdict") == "login-wall":
+                click.echo("hint       seed is cookies-only; for localStorage/SSO SPAs "
+                           "(e.g. Cloudflare) run: chrome-agent.sh login")
+    _run(ctx, run, "probe")
 
 
 @cli.command(name="close")

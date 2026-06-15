@@ -39,7 +39,22 @@ found=$(printf '%s\n' "${out}" | grep -oE 'Found [0-9]+ skills' | grep -oE '[0-9
 
 echo "SKILL.md files: ${dirs} | skills CLI discovered: ${found:-<none>}"
 if [ -z "${found}" ]; then
-  echo "WARNING: skills CLI reported no count (network/version issue) — relying on the parser above"
+  # No count means the real-consumer cross-check never actually ran (npx/network
+  # blocked, or the CLI stopped emitting "Found N skills"). Failing silently here
+  # would mask the very regressions this layer exists to catch, so fail by
+  # default. Offline local runs can opt out explicitly with SKILLS_CLI_OPTIONAL=1
+  # (CI never sets it, so CI always exercises the cross-check).
+  if [ "${SKILLS_CLI_OPTIONAL:-0}" = "1" ]; then
+    echo "WARNING: skills CLI produced no count; SKILLS_CLI_OPTIONAL=1 set — skipping cross-check"
+  else
+    {
+      echo "ERROR: skills CLI produced no count — the cross-check did not run."
+      echo "       Raw CLI output:"
+      printf '%s\n' "${out}" | sed 's/^/         /'
+      echo "       If you are offline, re-run with SKILLS_CLI_OPTIONAL=1 to downgrade to a warning."
+    } >&2
+    exit 1
+  fi
 elif [ "${found}" != "${dirs}" ]; then
   echo "ERROR: skills CLI discovered ${found} of ${dirs} skills — $((dirs - found)) silently dropped (unparseable frontmatter)" >&2
   exit 1

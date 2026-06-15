@@ -32,6 +32,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import math
 import os
 import platform
 import secrets
@@ -310,8 +311,12 @@ def open_tab(ctx: click.Context, url: str, wait: bool, timeout: float,
             await _cdp(page["webSocketDebuggerUrl"], "Page.bringToFront", {}, log)
         if wait:
             # A freshly created tab is at about:blank (readyState already
-            # "complete"); wait for it to navigate to the requested URL first.
-            await _wait_ready(o["host"], o["port"], target_id, timeout, o["strict"], log, await_nav=True)
+            # "complete"); wait for it to navigate to the requested URL first —
+            # unless about:blank IS the requested URL (else we'd wait out the
+            # whole timeout for a page that is already loaded).
+            blank_target = url.strip().startswith("about:blank")
+            await _wait_ready(o["host"], o["port"], target_id, timeout, o["strict"], log,
+                              await_nav=not blank_target)
         if o["json"]:
             _emit({"targetId": target_id, "browserContextId": context_id_local}, True)
         elif isolated:
@@ -436,7 +441,7 @@ _RESOLVE_JS = """
 (() => {{
   const el = document.querySelector({sel});
   if (!el) return {{found: false}};
-  el.scrollIntoView({{block: 'center', inline: 'center'}});
+  el.scrollIntoView({{block: 'center', inline: 'center', behavior: 'instant'}});
   const r = el.getBoundingClientRect();
   return {{found: true, x: r.left + r.width / 2, y: r.top + r.height / 2,
            w: r.width, h: r.height, captcha: !!el.closest({cap})}};
@@ -447,6 +452,16 @@ _RESOLVE_JS = """
 _POINT_CAPTCHA_JS = """
 (() => {{
   const el = document.elementFromPoint({x}, {y});
+  return !!(el && el.closest({cap}));
+}})()
+"""
+# `type` (without --into) and `key` act on whatever is already focused, so guard
+# the focused element too — otherwise a CAPTCHA field focused earlier could still
+# receive trusted input. A cross-origin CAPTCHA iframe surfaces as the <iframe>
+# host element, which the selector matches.
+_ACTIVE_CAPTCHA_JS = """
+(() => {{
+  const el = document.activeElement;
   return !!(el && el.closest({cap}));
 }})()
 """
@@ -470,9 +485,12 @@ def _parse_xy(spec: str) -> tuple[float, float] | None:
     if len(parts) != 2:
         return None
     try:
-        return float(parts[0].strip()), float(parts[1].strip())
+        x, y = float(parts[0].strip()), float(parts[1].strip())
     except ValueError:
         return None
+    if not (math.isfinite(x) and math.isfinite(y)):
+        return None  # NaN/inf are not real coordinates; treat as a (bad) selector
+    return x, y
 
 
 async def _resolve_point(ws: str, spec: str, log: Any) -> tuple[float, float]:
@@ -500,6 +518,13 @@ async def _resolve_point(ws: str, spec: str, log: Any) -> tuple[float, float]:
         click.echo(_CAPTCHA_MSG, err=True)
         raise SystemExit(2)
     return x, y
+
+
+async def _guard_active(ws: str, log: Any) -> None:
+    """Refuse trusted input when the focused element is inside a CAPTCHA widget."""
+    if await _eval_value(ws, _ACTIVE_CAPTCHA_JS.format(cap=json.dumps(_CAPTCHA_SEL)), log):
+        click.echo(_CAPTCHA_MSG, err=True)
+        raise SystemExit(2)
 
 
 async def _click_point(ws: str, x: float, y: float, log: Any) -> None:
@@ -577,6 +602,7 @@ def type_cmd(ctx: click.Context, text: str, target: str | None, into: str | None
         if into:
             x, y = await _resolve_point(ws, into, log)
             await _click_point(ws, x, y, log)
+        await _guard_active(ws, log)  # don't type into a focused CAPTCHA field
         await _cdp(ws, "Input.insertText", {"text": text}, log)
         if enter:
             await _press_key(ws, "Enter", log)
@@ -593,7 +619,9 @@ def key_cmd(ctx: click.Context, name: str, target: str | None) -> None:
     """Press one trusted key (Enter, Tab, Escape, ArrowDown, ...). See --help list."""
     async def run(o: Any, log: Any) -> None:
         page = await _resolve_page(o["host"], o["port"], target, o["strict"], log)
-        await _press_key(page["webSocketDebuggerUrl"], name, log)
+        ws = page["webSocketDebuggerUrl"]
+        await _guard_active(ws, log)  # don't send keystrokes into a focused CAPTCHA
+        await _press_key(ws, name, log)
         _emit({"key": name, "target": page["id"]} if o["json"] else f"pressed {name}", o["json"])
     _run(ctx, run, "key")
 
@@ -623,25 +651,31 @@ _PROBE_JS = r"""
   // Weak signal: the word appears anywhere (also matches "Login history" on an
   // authed page, so it can't decide a verdict on its own).
   const wallText = /\b(sign[ -]?in|log[ -]?in|continue with (google|github|apple|microsoft|sso)|single sign-on)\b/i.test(text);
-  // Strong signal: a prominent CTA/heading that *is* a sign-in action. Anchored
-  // and continuation-gated so nav labels like "Login history" don't match (only
-  // "Sign in", "Log in", "Sign in to X", "Continue with SSO", "Single sign-on").
-  const ctaRe = /^(?:(?:sign[ -]?in|log[ -]?in|log on)(?: to\b| with\b|$)|continue with (?:google|github|apple|microsoft|sso|saml|okta)|single sign-on$|sign in with sso$|use sso$)/i;
-  const cta = [...document.querySelectorAll('h1, h2, button, [type=submit], [role=button], a[href]')]
-    .filter(vis).some(el => ctaRe.test(((el.innerText || el.value || '')).trim()));
+  const ctaText = [...document.querySelectorAll('h1, h2, button, [type=submit], [role=button], a[href]')]
+    .filter(vis).map(el => ((el.innerText || el.value || '')).trim());
+  // Strongest CTA: an OAuth/SSO sign-in button is unambiguous on its own — these
+  // never appear on an authed dashboard, so they flag a wall even on a content-
+  // heavy OAuth screen (legal/marketing copy) that lacks an email field or form.
+  const oauthRe = /^(?:continue with (?:google|github|apple|microsoft|sso|saml|okta|email)|sign in with (?:google|github|apple|microsoft|sso|saml|okta)|single sign-on|use sso)\b/i;
+  const oauthCta = ctaText.some(t => oauthRe.test(t));
+  // Generic sign-in CTA. Anchored and continuation-gated so nav labels like
+  // "Login history" don't match (only "Sign in", "Log in", "Sign in to X").
+  const ctaRe = /^(?:sign[ -]?in|log[ -]?in|log on)(?: to\b| with\b|$)/i;
+  const cta = oauthCta || ctaText.some(t => ctaRe.test(t));
   const formAction = [...document.querySelectorAll('form[action]')]
     .some(f => /login|signin|sso|auth/i.test(f.getAttribute('action') || ''));
   const urlHint = /\b(login|signin|sign-in|sso|auth|account\/login)\b/i.test(location.href);
-  // login-wall when: a password field is visible; OR a sign-in CTA backed by an
-  // auth input / login form / login URL / a sparse (sign-in-only) page; OR an
-  // auth input on a page that reads as sign-in by text or URL.
-  const wall = pw
+  // login-wall when: a password field is visible; OR an OAuth/SSO button (strong
+  // on its own); OR a generic sign-in CTA backed by an auth input / login form /
+  // login URL / a sparse (sign-in-only) page; OR an auth input on a page that
+  // reads as sign-in by text or URL.
+  const wall = pw || oauthCta
     || (cta && (authInput || formAction || urlHint || text.length < 600))
     || (authInput && (wallText || urlHint));
   const verdict = wall ? 'login-wall' : (text.length > 0 ? 'likely-authed' : 'unknown');
   return {url: location.href, title: document.title, ready: document.readyState,
           hasPassword: pw, authInput, signInText: wallText, signInCta: cta,
-          formAction, urlHint, verdict};
+          oauthCta, formAction, urlHint, verdict};
 })()
 """
 
@@ -678,7 +712,9 @@ def probe(ctx: click.Context, url: str | None, target: str | None, timeout: floa
             if front:
                 p = await _resolve_page(o["host"], o["port"], tgt, o["strict"], log)
                 await _cdp(p["webSocketDebuggerUrl"], "Page.bringToFront", {}, log)
-            await _wait_ready(o["host"], o["port"], tgt, timeout, o["strict"], log, await_nav=bool(opened))
+            blank_target = bool(url) and url.strip().startswith("about:blank")
+            await _wait_ready(o["host"], o["port"], tgt, timeout, o["strict"], log,
+                              await_nav=bool(opened) and not blank_target)
             page = await _resolve_page(o["host"], o["port"], tgt, o["strict"], log)
             # SPAs hydrate after readyState=complete; an immediate check sees an
             # empty body and reads "unknown". Re-probe briefly until the verdict

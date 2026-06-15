@@ -195,11 +195,13 @@ endpoint_is_ours() {
   proc_on_profile
 }
 
-# down    = no process and no endpoint
-# wedged  = process alive but endpoint unresponsive (the dangerous case)
-# ok      = endpoint responsive
+# ok      = OUR profile's endpoint is responsive (not just any browser on the port)
+# wedged  = our process alive but endpoint unresponsive (the dangerous case)
+# down    = our bridge not running (a foreign browser squatting on the port counts
+#           as down here, so health/status never greenlights driving someone else's
+#           browser; `start` then surfaces the explicit port-conflict error)
 health_state() {
-  if cdp_up; then echo ok
+  if endpoint_is_ours; then echo ok
   elif proc_on_profile; then echo wedged
   else echo down; fi
 }
@@ -403,7 +405,9 @@ cmd_url() { printf '%s\n' "$ENDPOINT"; }
 cmd_login() {
   ensure_not_default_profile
   local bin; bin="$(resolve_bin)" || die "Chrome binary not found; set CHROME_AGENT_BIN"
-  cdp_up && die "agent Chrome is running on this profile; run 'stop' first, then 'login'."
+  # A login window shares this profile dir, so refuse only if THIS profile is in
+  # use (covers a wedged bridge too); a foreign browser on the port is irrelevant.
+  proc_on_profile && die "agent Chrome is running on this profile; run 'stop' first, then 'login'."
   log "opening Chrome for interactive login (profile: $PROFILE)"
   log "log into your sites, then quit Chrome and run: $0 start"
   # Run the binary directly in the foreground; blocks until you quit Chrome.

@@ -424,6 +424,12 @@ _CAPTCHA_SEL = (
     'iframe[src*="turnstile"], iframe[src*="recaptcha"], '
     'iframe[src*="hcaptcha"], iframe[title*="reCAPTCHA"], iframe[title*="hCaptcha"]'
 )
+_CAPTCHA_MSG = ("error: target is inside a CAPTCHA / human-verification widget "
+                "(reCAPTCHA/hCaptcha/Turnstile) — that is a human step, not an "
+                "agent one. Stop and hand off to the user.")
+# Scope the CAPTCHA guard to the ACTUAL target (the element, or the one under the
+# click point), not the whole page — a page that merely embeds a Turnstile widget
+# elsewhere must still allow clicking its own form fields.
 _RESOLVE_JS = """
 (() => {{
   const el = document.querySelector({sel});
@@ -431,8 +437,15 @@ _RESOLVE_JS = """
   el.scrollIntoView({{block: 'center', inline: 'center'}});
   const r = el.getBoundingClientRect();
   return {{found: true, x: r.left + r.width / 2, y: r.top + r.height / 2,
-           w: r.width, h: r.height,
-           captcha: !!el.closest({cap}) || !!document.querySelector({cap})}};
+           w: r.width, h: r.height, captcha: !!el.closest({cap})}};
+}})()
+"""
+# For coordinate clicks (which skip the selector path), resolve the element under
+# the point and check whether IT sits inside a CAPTCHA widget.
+_POINT_CAPTCHA_JS = """
+(() => {{
+  const el = document.elementFromPoint({x}, {y});
+  return !!(el && el.closest({cap}));
 }})()
 """
 
@@ -462,17 +475,20 @@ def _parse_xy(spec: str) -> tuple[float, float] | None:
 
 async def _resolve_point(ws: str, spec: str, log: Any) -> tuple[float, float]:
     """Turn a 'x,y' or CSS-selector spec into viewport coords, refusing CAPTCHAs."""
+    cap = json.dumps(_CAPTCHA_SEL)
     xy = _parse_xy(spec)
     if xy is not None:
-        return xy
-    info = await _eval_value(ws, _RESOLVE_JS.format(sel=json.dumps(spec), cap=json.dumps(_CAPTCHA_SEL)), log)
+        x, y = xy
+        if await _eval_value(ws, _POINT_CAPTCHA_JS.format(x=x, y=y, cap=cap), log):
+            click.echo(_CAPTCHA_MSG, err=True)
+            raise SystemExit(2)
+        return x, y
+    info = await _eval_value(ws, _RESOLVE_JS.format(sel=json.dumps(spec), cap=cap), log)
     if not info or not info.get("found"):
         click.echo(f"error: selector not found: {spec}", err=True)
         raise SystemExit(2)
     if info.get("captcha"):
-        click.echo("error: target is inside a CAPTCHA / human-verification widget "
-                   "(reCAPTCHA/hCaptcha/Turnstile) — that is a human step, not an "
-                   "agent one. Stop and hand off to the user.", err=True)
+        click.echo(_CAPTCHA_MSG, err=True)
         raise SystemExit(2)
     if not info.get("w") or not info.get("h"):
         click.echo(f"error: selector {spec!r} has zero size (hidden?); cannot click", err=True)
@@ -582,7 +598,7 @@ def key_cmd(ctx: click.Context, name: str, target: str | None) -> None:
 # screen WITHOUT redirecting — so location.href still looks authed. This probes
 # the DOM for sign-in markers instead, turning a silent false-positive into a
 # clear "login-wall" verdict that tells the agent to use `chrome-agent.sh login`.
-_PROBE_JS = """
+_PROBE_JS = r"""
 (() => {
   const vis = (el) => {
     if (!el) return false;
@@ -592,16 +608,34 @@ _PROBE_JS = """
     return s.visibility !== 'hidden' && s.display !== 'none';
   };
   const pw = [...document.querySelectorAll('input[type=password]')].some(vis);
+  // A visible email/username field is the other half of an auth screen (email-
+  // first SSO has no password field yet).
+  const authInput = [...document.querySelectorAll(
+    'input[type=email], input[autocomplete=username], input[autocomplete=email], '
+    + 'input[name*=email i], input[id*=email i], input[name*=user i]')].some(vis);
   const text = (document.body ? document.body.innerText : '').slice(0, 4000);
-  const re = /\\b(sign in|signin|log in|login|continue with (google|github|apple|sso)|single sign-on)\\b/i;
-  const wallText = re.test(text);
+  // Weak signal: the word appears anywhere (also matches "Login history" on an
+  // authed page, so it can't decide a verdict on its own).
+  const wallText = /\b(sign[ -]?in|log[ -]?in|continue with (google|github|apple|microsoft|sso)|single sign-on)\b/i.test(text);
+  // Strong signal: a prominent CTA/heading that *is* a sign-in action. Anchored
+  // and continuation-gated so nav labels like "Login history" don't match (only
+  // "Sign in", "Log in", "Sign in to X", "Continue with SSO", "Single sign-on").
+  const ctaRe = /^(?:(?:sign[ -]?in|log[ -]?in|log on)(?: to\b| with\b|$)|continue with (?:google|github|apple|microsoft|sso|saml|okta)|single sign-on$|sign in with sso$|use sso$)/i;
+  const cta = [...document.querySelectorAll('h1, h2, button, [type=submit], [role=button], a[href]')]
+    .filter(vis).some(el => ctaRe.test(((el.innerText || el.value || '')).trim()));
   const formAction = [...document.querySelectorAll('form[action]')]
     .some(f => /login|signin|sso|auth/i.test(f.getAttribute('action') || ''));
-  const urlHint = /\\b(login|signin|sign-in|sso|auth|account\\/login)\\b/i.test(location.href);
-  const wall = pw || (wallText && (formAction || urlHint)) || (urlHint && wallText);
+  const urlHint = /\b(login|signin|sign-in|sso|auth|account\/login)\b/i.test(location.href);
+  // login-wall when: a password field is visible; OR a sign-in CTA backed by an
+  // auth input / login form / login URL / a sparse (sign-in-only) page; OR an
+  // auth input on a page that reads as sign-in by text or URL.
+  const wall = pw
+    || (cta && (authInput || formAction || urlHint || text.length < 600))
+    || (authInput && (wallText || urlHint));
+  const verdict = wall ? 'login-wall' : (text.length > 0 ? 'likely-authed' : 'unknown');
   return {url: location.href, title: document.title, ready: document.readyState,
-          hasPassword: pw, signInText: wallText, formAction, urlHint,
-          verdict: wall ? 'login-wall' : (pw === false && text.length > 0 ? 'likely-authed' : 'unknown')};
+          hasPassword: pw, authInput, signInText: wallText, signInCta: cta,
+          formAction, urlHint, verdict};
 })()
 """
 
@@ -659,7 +693,8 @@ def probe(ctx: click.Context, url: str | None, target: str | None, timeout: floa
             click.echo(f"verdict    {info.get('verdict')}")
             click.echo(f"url        {info.get('url')}")
             click.echo(f"signals    password={info.get('hasPassword')} "
-                       f"signInText={info.get('signInText')} urlHint={info.get('urlHint')}")
+                       f"authInput={info.get('authInput')} signInCta={info.get('signInCta')} "
+                       f"urlHint={info.get('urlHint')}")
             if info.get("verdict") == "login-wall":
                 click.echo("hint       seed is cookies-only; for localStorage/SSO SPAs "
                            "(e.g. Cloudflare) run: chrome-agent.sh login")

@@ -17,13 +17,12 @@ jobs:
         # and so unreviewed action changes can't land via @v4/@master.
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
-      - name: Run ShellCheck
-        # ludeeus/action-shellcheck v2.0.0 — pinned to SHA (was @master).
-        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38
-        with:
-          scandir: '.'
-          severity: warning
-          ignore_paths: '.git .github'
+      # Use the same `make lint` target developers run locally so CI and local
+      # checks never diverge (single source of truth in the Makefile). shellcheck
+      # is preinstalled on ubuntu-latest; `make lint` lints tracked shell scripts
+      # via `git ls-files` at severity=warning and fails loudly if it's missing.
+      - name: Run make lint
+        run: make lint
 
   validate-skills:
     name: Validate Skills
@@ -32,54 +31,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
-      - name: Validate SKILL.md frontmatter
-        run: |
-          echo "Validating SKILL.md files..."
-
-          for skill_dir in skills/*/; do
-            skill_name=$(basename "${skill_dir}")
-            skill_file="${skill_dir}SKILL.md"
-
-            if [ ! -f "${skill_file}" ]; then
-              echo "❌ Missing SKILL.md in ${skill_name}"
-              exit 1
-            fi
-
-            # Check frontmatter exists
-            if ! head -1 "${skill_file}" | grep -q '^---$'; then
-              echo "❌ ${skill_name}: Missing YAML frontmatter"
-              exit 1
-            fi
-
-            # Extract frontmatter
-            frontmatter=$(awk '/^---$/{if(++n==2)exit;next}n==1' "${skill_file}")
-
-            # Check required fields
-            if ! echo "${frontmatter}" | grep -q '^name:'; then
-              echo "❌ ${skill_name}: Missing 'name' field"
-              exit 1
-            fi
-
-            if ! echo "${frontmatter}" | grep -q '^description:'; then
-              echo "❌ ${skill_name}: Missing 'description' field"
-              exit 1
-            fi
-
-            # Validate name format (lowercase, hyphens only)
-            name_value=$(echo "${frontmatter}" | awk '/^name:/ {print $2}')
-            if ! echo "${name_value}" | grep -qE '^[a-z0-9-]+$'; then
-              echo "❌ ${skill_name}: name must be lowercase with hyphens only"
-              exit 1
-            fi
-
-            # Check name length (<64 chars)
-            if [ ${#name_value} -gt 64 ]; then
-              echo "❌ ${skill_name}: name must be less than 64 characters"
-              exit 1
-            fi
-
-            echo "✓ ${skill_name}: Valid"
-          done
-
-          echo ""
-          echo "All skills validated successfully!"
+      # Parse each SKILL.md frontmatter with js-yaml (the engine skills.sh uses)
+      # and cross-check discovery with the real `skills` CLI. Logic lives in the
+      # script so it's runnable locally via `make validate-skills`. Node ships on
+      # ubuntu-latest; the script installs js-yaml on demand.
+      - name: Validate skills
+        run: make validate-skills

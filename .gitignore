@@ -20,6 +20,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.ruff_cache/
 .venv/
 venv/
 ENV/

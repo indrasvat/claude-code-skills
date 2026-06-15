@@ -1,7 +1,7 @@
 {
   "name": "indrasvat-skills",
-  "description": "14 Claude Code skills: CI gating, exec plans, PR shipping, code cleanup, PR triage, K8s diffing, migration safety, API compat, rollout health, CRD impact analysis, PRD generation, iTerm2 automation, Cloudflare deployment, and CodeRabbit reviews",
-  "version": "1.4.0",
+  "description": "15 Claude Code skills: CI gating, exec plans, PR shipping, code cleanup, PR triage, K8s diffing, migration safety, API compat, rollout health, CRD impact analysis, PRD generation, iTerm2 automation, Cloudflare deployment, CodeRabbit reviews, and browsing-as-you (shared authenticated Chrome over CDP)",
+  "version": "1.5.0",
   "commands": "./commands/",
   "skills": "./skills/",
   "author": {

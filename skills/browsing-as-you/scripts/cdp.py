@@ -309,7 +309,9 @@ def open_tab(ctx: click.Context, url: str, wait: bool, timeout: float,
             page = await _resolve_page(o["host"], o["port"], target_id, o["strict"], log)
             await _cdp(page["webSocketDebuggerUrl"], "Page.bringToFront", {}, log)
         if wait:
-            await _wait_ready(o["host"], o["port"], target_id, timeout, o["strict"], log)
+            # A freshly created tab is at about:blank (readyState already
+            # "complete"); wait for it to navigate to the requested URL first.
+            await _wait_ready(o["host"], o["port"], target_id, timeout, o["strict"], log, await_nav=True)
         if o["json"]:
             _emit({"targetId": target_id, "browserContextId": context_id_local}, True)
         elif isolated:
@@ -479,21 +481,25 @@ async def _resolve_point(ws: str, spec: str, log: Any) -> tuple[float, float]:
     xy = _parse_xy(spec)
     if xy is not None:
         x, y = xy
-        if await _eval_value(ws, _POINT_CAPTCHA_JS.format(x=x, y=y, cap=cap), log):
+    else:
+        info = await _eval_value(ws, _RESOLVE_JS.format(sel=json.dumps(spec), cap=cap), log)
+        if not info or not info.get("found"):
+            click.echo(f"error: selector not found: {spec}", err=True)
+            raise SystemExit(2)
+        if info.get("captcha"):  # element (or an ancestor) is a CAPTCHA widget
             click.echo(_CAPTCHA_MSG, err=True)
             raise SystemExit(2)
-        return x, y
-    info = await _eval_value(ws, _RESOLVE_JS.format(sel=json.dumps(spec), cap=cap), log)
-    if not info or not info.get("found"):
-        click.echo(f"error: selector not found: {spec}", err=True)
-        raise SystemExit(2)
-    if info.get("captcha"):
+        if not info.get("w") or not info.get("h"):
+            click.echo(f"error: selector {spec!r} has zero size (hidden?); cannot click", err=True)
+            raise SystemExit(2)
+        x, y = info["x"], info["y"]
+    # Hit-test whatever is actually topmost at the click point — for coords, and
+    # for selectors too, so a CAPTCHA interstitial overlaying the resolved
+    # element is caught even though closest() on the underlying element wasn't.
+    if await _eval_value(ws, _POINT_CAPTCHA_JS.format(x=x, y=y, cap=cap), log):
         click.echo(_CAPTCHA_MSG, err=True)
         raise SystemExit(2)
-    if not info.get("w") or not info.get("h"):
-        click.echo(f"error: selector {spec!r} has zero size (hidden?); cannot click", err=True)
-        raise SystemExit(2)
-    return info["x"], info["y"]
+    return x, y
 
 
 async def _click_point(ws: str, x: float, y: float, log: Any) -> None:

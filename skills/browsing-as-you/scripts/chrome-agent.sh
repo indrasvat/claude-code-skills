@@ -175,6 +175,26 @@ main_pid_on_profile() {
   return 1
 }
 
+# A pid is OURS only if its command line carries this profile's --user-data-dir.
+# Guards stop/kill against a stale pidfile whose PID was reused by something else.
+pid_is_ours() { ps -p "$1" -o command= 2>/dev/null | grep -q -- "--user-data-dir=$PROFILE"; }
+
+# The responsive endpoint on our port is OURS only if our profile's Chrome is what
+# holds the port. Without this, any other local CDP browser/tool squatting on the
+# port would be mistaken for the bridge, and seed/open/MCP would drive it - leaking
+# the user's real cookies into an unrelated browser. Prefer an exact lsof check on
+# the listening pid; fall back to "a Chrome on our profile exists" (it can only be
+# bound to our port, since we always launch it with --remote-debugging-port=$PORT).
+endpoint_is_ours() {
+  cdp_up || return 1
+  if command -v lsof >/dev/null 2>&1; then
+    local lpid
+    lpid="$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | head -1)"
+    [[ -n "$lpid" ]] && { pid_is_ours "$lpid"; return; }
+  fi
+  proc_on_profile
+}
+
 # down    = no process and no endpoint
 # wedged  = process alive but endpoint unresponsive (the dangerous case)
 # ok      = endpoint responsive
@@ -209,7 +229,7 @@ acquire_start_lock() {
     if mkdir "$LOCKDIR" 2>/dev/null; then
       date +%s >"$LOCKDIR/ts"; echo "$$" >"$LOCKDIR/pid"; echo "own"; return 0
     fi
-    if cdp_up; then echo "done"; return 0; fi
+    if endpoint_is_ours; then echo "done"; return 0; fi
     if [[ -f "$LOCKDIR/ts" ]]; then
       now="$(date +%s)"; ts="$(cat "$LOCKDIR/ts" 2>/dev/null || echo 0)"; age=$((now - ts))
       if (( age > LOCK_STALE_S )) && ! proc_on_profile; then
@@ -229,7 +249,12 @@ cmd_start() {
   ensure_not_default_profile
   debug "start requested; state=$(health_state)"
 
-  if cdp_up; then log "already running at $ENDPOINT"; cmd_url; return 0; fi
+  if endpoint_is_ours; then log "already running at $ENDPOINT"; cmd_url; return 0; fi
+  if cdp_up; then
+    die "port $PORT answers CDP but is NOT this profile's Chrome - another browser or \
+tool owns $ENDPOINT. Stop it, or set CHROME_AGENT_PORT to a free port (and point your \
+MCP --browser-url at the same port)."
+  fi
 
   if [[ "$(health_state)" == wedged ]]; then
     warn "wedged Chrome detected on this profile; force-recovering before start"
@@ -244,7 +269,7 @@ cmd_start() {
       # Double-checked locking: another caller may have finished bringing the
       # endpoint up between our first check and acquiring the lock. Without this
       # re-check, a late acquirer would launch a redundant second browser.
-      if cdp_up; then release_start_lock; log "already running (started concurrently)"; cmd_url; return 0; fi
+      if endpoint_is_ours; then release_start_lock; log "already running (started concurrently)"; cmd_url; return 0; fi
       debug "acquired start lock"
       ;;
   esac
@@ -305,7 +330,10 @@ cmd_stop() {
   local stopped=0 pid
   if [[ -f "$PIDFILE" ]]; then
     pid="$(cat "$PIDFILE")"
-    if kill -0 "$pid" 2>/dev/null; then
+    # Only signal the pidfile PID if it is still THIS profile's Chrome. A stale
+    # pidfile (crash/reboot) whose PID was reused must not get killed; the
+    # pkill-by-profile sweep below still stops our real process.
+    if kill -0 "$pid" 2>/dev/null && pid_is_ours "$pid"; then
       kill "$pid" 2>/dev/null || true
       local waited=0
       while kill -0 "$pid" 2>/dev/null && (( waited < STOP_GRACE * 2 )); do sleep 0.5; waited=$((waited + 1)); done

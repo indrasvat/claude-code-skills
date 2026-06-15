@@ -1,6 +1,6 @@
 # Claude Code Skills
 
-A marketplace of personal [Claude Code](https://claude.ai/code) plugins: 14 skills for AI-assisted dev workflows, plus `dootdashaa`, a glanceable statusline.
+A marketplace of personal [Claude Code](https://claude.ai/code) plugins: 15 skills for AI-assisted dev workflows, plus `dootdashaa`, a glanceable statusline.
 
 ## 🎯 Overview
 
@@ -8,7 +8,7 @@ This repository is a Claude Code marketplace exposing two independently-installa
 
 | Plugin | Install command | What it adds |
 |---|---|---|
-| **indrasvat-skills** | `/plugin install indrasvat-skills@indrasvat-skills` | 14 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, iTerm2 automation, …) |
+| **indrasvat-skills** | `/plugin install indrasvat-skills@indrasvat-skills` | 15 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, iTerm2 automation, browsing-as-you, …) |
 | **dootdashaa** | `/plugin install dootdashaa@indrasvat-skills` | Single-line, Nerd-Font-icon statusline. `~9ms` p50 render budget. |
 
 Both share one `/plugin marketplace add` step (see [Installation](#installation)). Each can be installed, updated, and uninstalled on its own.
@@ -17,7 +17,7 @@ Both share one `/plugin marketplace add` step (see [Installation](#installation)
 
 Glanceable, single-line. One carrier per signal (icon, text, or colour — never two). Zero emoji. Pre-computed git cache keeps the hot path under the 300ms Claude Code debounce. See [`plugins/dootdashaa/README.md`](plugins/dootdashaa/README.md) for env-var options and the install / uninstall command list; design report is at [`plugins/dootdashaa/docs/DESIGN.html`](plugins/dootdashaa/docs/DESIGN.html).
 
-### Skills (14 total)
+### Skills (15 total)
 
 #### Universal Dev Workflow (5 new)
 
@@ -101,6 +101,21 @@ Local AI code reviews via CodeRabbit CLI. Use sparingly—rate-limited to 1 revi
 - Background execution with monitoring
 - Prioritized findings (critical > major > minor)
 
+#### Browser Automation (1 new)
+
+#### 🌐 **browsing-as-you**
+One persistent, already-authenticated Chrome that every agent and sub-agent attaches to over the DevTools Protocol — no per-task browser launches, no re-login, and no repeated macOS "Allow" prompts. The window launches in the background (`open -g`) and never steals focus.
+
+**Capabilities:**
+- `chrome-agent.sh` control plane: idempotent/concurrent-safe `start`, plus `status`/`health`/`doctor`/`recover` with stable exit codes (0 ok · 3 down · 4 wedged)
+- `cdp.py` driver: open background tabs, navigate, eval JS, screenshot, browser contexts — all safe for parallel agents via owned `targetId`s and `--strict`
+- **`seed`**: import your existing Chrome logins by decrypting a profile's cookies (macOS keychain → PBKDF2 → AES-128-CBC) and injecting them over CDP — act as you on sites you're already signed into, no re-login
+- One-time `login` flow for DBSC (Google/YouTube) and localStorage-token apps that cookies alone can't carry — durable across restarts and reboots
+- `--front` to foreground visibility-gated SPAs (e.g. the Cloudflare dashboard), and `autostart on|off|status`: a self-pathing launchd LaunchAgent for hands-free start at login
+- Dedicated profile (your everyday Chrome is never touched); real keychain by default so logins persist, with `CHROME_AGENT_MOCK_KEYCHAIN=1` for a prompt-free seed-only mode
+
+**Platform:** macOS (Linux supported except `seed`, which needs `login`). Needs `uv`; chrome-devtools-mcp integration needs Node 22+.
+
 ## Installation
 
 ### Via Claude Code Plugin (Recommended)
@@ -110,7 +125,7 @@ Inside a `claude` session, register the marketplace once and install whichever p
 ```
 /plugin marketplace add indrasvat/claude-code-skills    # once per machine
 
-# 14 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, ...)
+# 15 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, browsing-as-you, ...)
 /plugin install indrasvat-skills@indrasvat-skills
 
 # Statusline
@@ -271,7 +286,11 @@ claude-code-skills/
 │   │   ├── SKILL.md
 │   │   └── examples/
 │   ├── cf-edge/SKILL.md        # Cloudflare deployment
-│   └── coderabbit/SKILL.md     # AI code reviews
+│   ├── coderabbit/SKILL.md     # AI code reviews
+│   └── browsing-as-you/          # Shared authenticated Chrome over CDP
+│       ├── SKILL.md
+│       ├── scripts/{chrome-agent.sh,cdp.py}
+│       └── reference/{integration.md,launchd.md}
 ├── README.md
 ├── LICENSE                      # MIT License
 ├── bin/

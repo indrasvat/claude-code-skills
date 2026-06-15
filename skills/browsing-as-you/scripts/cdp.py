@@ -348,12 +348,17 @@ async def _wait_ready(host: str, port: int, target_id: str, timeout: float, stri
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         page = await _resolve_page(host, port, target_id, strict, log)
-        out = await _cdp(page["webSocketDebuggerUrl"], "Runtime.evaluate",
-                         {"expression": "[document.readyState, location.href]", "returnByValue": True}, log)
-        state, href = out.get("result", {}).get("value", [None, None])
-        blank = (not href) or href == "about:blank"
-        if state == "complete" and not (await_nav and blank):
-            return
+        try:
+            out = await _cdp(page["webSocketDebuggerUrl"], "Runtime.evaluate",
+                             {"expression": "[document.readyState, location.href]", "returnByValue": True}, log)
+            state, href = out.get("result", {}).get("value", [None, None])
+            blank = (not href) or href == "about:blank"
+            if state == "complete" and not (await_nav and blank):
+                return
+        except RuntimeError as exc:
+            # Mid-navigation the execution context is torn down ("Execution
+            # context was destroyed"); that's transient — keep polling.
+            log.debug(f"wait poll transient error: {exc!r}")
         await asyncio.sleep(READY_POLL_S)
     log.warning(f"wait timed out after {timeout}s for {target_id}")
     click.echo(f"warning: timed out after {timeout}s waiting for load", err=True)
@@ -511,12 +516,6 @@ async def _resolve_point(ws: str, spec: str, log: Any) -> tuple[float, float]:
             click.echo(f"error: selector {spec!r} has zero size (hidden?); cannot click", err=True)
             raise SystemExit(2)
         x, y = info["x"], info["y"]
-    # Hit-test whatever is actually topmost at the click point — for coords, and
-    # for selectors too, so a CAPTCHA interstitial overlaying the resolved
-    # element is caught even though closest() on the underlying element wasn't.
-    if await _eval_value(ws, _POINT_CAPTCHA_JS.format(x=x, y=y, cap=cap), log):
-        click.echo(_CAPTCHA_MSG, err=True)
-        raise SystemExit(2)
     return x, y
 
 
@@ -528,8 +527,14 @@ async def _guard_active(ws: str, log: Any) -> None:
 
 
 async def _click_point(ws: str, x: float, y: float, log: Any) -> None:
-    base = {"x": x, "y": y, "button": "left", "clickCount": 1}
     await _cdp(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y}, log)
+    # Hit-test AFTER the hover settles and immediately before the press, so a
+    # CAPTCHA overlay revealed on hover (or one the coords/selector resolved onto)
+    # is caught with no TOCTOU gap before the actual click lands.
+    if await _eval_value(ws, _POINT_CAPTCHA_JS.format(x=x, y=y, cap=json.dumps(_CAPTCHA_SEL)), log):
+        click.echo(_CAPTCHA_MSG, err=True)
+        raise SystemExit(2)
+    base = {"x": x, "y": y, "button": "left", "clickCount": 1}
     await _cdp(ws, "Input.dispatchMouseEvent", {**base, "type": "mousePressed"}, log)
     await _cdp(ws, "Input.dispatchMouseEvent", {**base, "type": "mouseReleased"}, log)
 
@@ -605,6 +610,7 @@ def type_cmd(ctx: click.Context, text: str, target: str | None, into: str | None
         await _guard_active(ws, log)  # don't type into a focused CAPTCHA field
         await _cdp(ws, "Input.insertText", {"text": text}, log)
         if enter:
+            await _guard_active(ws, log)  # re-check: insert may have moved focus
             await _press_key(ws, "Enter", log)
         _emit({"typed": len(text), "target": page["id"]} if o["json"]
               else f"typed {len(text)} chars", o["json"])
@@ -656,7 +662,7 @@ _PROBE_JS = r"""
   // Strongest CTA: an OAuth/SSO sign-in button is unambiguous on its own — these
   // never appear on an authed dashboard, so they flag a wall even on a content-
   // heavy OAuth screen (legal/marketing copy) that lacks an email field or form.
-  const oauthRe = /^(?:continue with (?:google|github|apple|microsoft|sso|saml|okta|email)|sign in with (?:google|github|apple|microsoft|sso|saml|okta)|single sign-on|use sso)\b/i;
+  const oauthRe = /^(?:continue with (?:google|github|apple|microsoft|sso|saml|okta|email)|(?:sign|log)[ -]?in with (?:google|github|apple|microsoft|sso|saml|okta)|single sign-on|use sso)\b/i;
   const oauthCta = ctaText.some(t => oauthRe.test(t));
   // Generic sign-in CTA. Anchored and continuation-gated so nav labels like
   // "Login history" don't match (only "Sign in", "Log in", "Sign in to X").
@@ -723,11 +729,20 @@ def probe(ctx: click.Context, url: str | None, target: str | None, timeout: floa
             settle = time.monotonic() + min(8.0, timeout)
             while info.get("verdict") == "unknown" and time.monotonic() < settle:
                 await asyncio.sleep(0.5)
-                info = await _eval_value(page["webSocketDebuggerUrl"], _PROBE_JS, log)
+                try:
+                    info = await _eval_value(page["webSocketDebuggerUrl"], _PROBE_JS, log)
+                except RuntimeError as exc:
+                    # A client-side route change tears down the context mid-settle;
+                    # keep the last verdict and retry on the next tick.
+                    log.debug(f"probe settle transient error: {exc!r}")
         finally:
+            # Never let cleanup mask the real failure from the try block.
             if opened and not keep:
-                bws = await _browser_ws(o["host"], o["port"], log)
-                await _cdp(bws, "Target.closeTarget", {"targetId": opened}, log)
+                try:
+                    bws = await _browser_ws(o["host"], o["port"], log)
+                    await _cdp(bws, "Target.closeTarget", {"targetId": opened}, log)
+                except (RuntimeError, SystemExit) as exc:
+                    log.warning(f"probe could not close target {opened}: {exc!r}")
         log.info(f"probe verdict={info.get('verdict')} url={info.get('url')}")
         if o["json"]:
             _emit({**info, "targetId": tgt if (keep or not opened) else None}, True)

@@ -109,6 +109,8 @@ One persistent, already-authenticated Chrome that every agent and sub-agent atta
 **Capabilities:**
 - `chrome-agent.sh` control plane: idempotent/concurrent-safe `start`, plus `status`/`health`/`doctor`/`recover` with stable exit codes (0 ok · 3 down · 4 wedged)
 - `cdp.py` driver: open background tabs, navigate, eval JS, screenshot, browser contexts — all safe for parallel agents via owned `targetId`s and `--strict`
+- **Trusted input** (`click`/`type`/`key` via the CDP Input domain) that drives react-select/combobox/checkbox widgets which ignore synthetic events — and refuses CAPTCHA/Turnstile targets (human-only step)
+- **`probe`**: DOM-based auth check (`login-wall \| likely-authed \| unknown`) so a cookie-only `seed` that silently lands on a sign-in screen (Cloudflare and other localStorage/SSO SPAs) is caught, instead of trusting an unreliable URL heuristic
 - **`seed`**: import your existing Chrome logins by decrypting a profile's cookies (macOS keychain → PBKDF2 → AES-128-CBC) and injecting them over CDP — act as you on sites you're already signed into, no re-login
 - One-time `login` flow for DBSC (Google/YouTube) and localStorage-token apps that cookies alone can't carry — durable across restarts and reboots
 - `--front` to foreground visibility-gated SPAs (e.g. the Cloudflare dashboard), and `autostart on|off|status`: a self-pathing launchd LaunchAgent for hands-free start at login

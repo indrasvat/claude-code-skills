@@ -27,6 +27,10 @@ ENV/
 env/
 *.egg-info/
 
+# Node (transient — `make validate-skills` installs js-yaml here)
+node_modules/
+package-lock.json
+
 # Local development
 .env
 .env.local

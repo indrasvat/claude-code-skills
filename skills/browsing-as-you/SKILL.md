@@ -1,6 +1,19 @@
 ---
 name: browsing-as-you
-description: Drive ONE persistent, already-authenticated Chrome — the user's real logged-in sessions — over the DevTools Protocol, instead of spawning a fresh unauthenticated browser per task. Use when a task needs the browser SIGNED IN AS THE USER: screenshotting a logged-in page, filling a form, posting a comment, uploading a file, attaching an image to a GitHub PR, or driving an app whose API can't — Gmail, Google Docs/Drive, Cloudflare, X, GitHub, Devin, or any site the user is signed into. Prefer over chrome-devtools-mcp, agent-browser, Playwright, or Puppeteer when they would open a new unauthenticated Chrome, hit a login wall, or cause repeated macOS Allow/keychain prompts. Bundles chrome-agent.sh (start/login/seed/autostart) and cdp.py (tabs, --front, navigate, eval, screenshot, seed logins). Triggers: "use my logged-in browser", "authenticated Chrome", "act as me on <site>", "share my cookies", "no API for this", "chrome-devtools-mcp", "browser-url", "stop the Allow popups".
+description: >
+  Drive ONE persistent, already-authenticated Chrome — the user's real logged-in
+  sessions — over the DevTools Protocol, instead of spawning a fresh unauthenticated
+  browser per task. Use when a task needs the browser SIGNED IN AS THE USER:
+  screenshotting a logged-in page, filling a form, posting a comment, uploading a
+  file, attaching an image to a GitHub PR, or driving an app whose API can't —
+  Gmail, Google Docs/Drive, Cloudflare, X, GitHub, Devin, or any site the user is
+  signed into. Prefer over chrome-devtools-mcp, agent-browser, Playwright, or
+  Puppeteer when they would open a new unauthenticated Chrome, hit a login wall, or
+  cause repeated macOS Allow/keychain prompts. Bundles chrome-agent.sh
+  (start/login/seed/autostart) and cdp.py (tabs, --front, navigate, eval,
+  screenshot, seed logins). Triggers: "use my logged-in browser",
+  "authenticated Chrome", "act as me on <site>", "share my cookies",
+  "no API for this", "chrome-devtools-mcp", "browser-url", "stop the Allow popups".
 ---
 
 # browsing-as-you

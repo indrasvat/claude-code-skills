@@ -118,10 +118,27 @@ def _die_unreachable(url: str, exc: Exception, log: Any) -> None:
     raise SystemExit(3)
 
 
+# CDP methods whose params carry secrets (cookie values) we must never write to
+# the on-disk log: `seed` pushes decrypted real cookies through Storage.setCookies.
+_SENSITIVE_METHODS = {"Storage.setCookies", "Network.setCookie", "Network.setCookies"}
+
+
+def _loggable_params(method: str, params: dict[str, Any] | None) -> Any:
+    """Redact cookie values before they reach <state>/cdp.log."""
+    if not params or method not in _SENSITIVE_METHODS:
+        return params or {}
+    safe = dict(params)
+    if isinstance(safe.get("cookies"), list):
+        safe["cookies"] = f"[{len(safe['cookies'])} cookies redacted]"
+    if "value" in safe:
+        safe["value"] = "<redacted>"
+    return safe
+
+
 async def _cdp(ws_url: str, method: str, params: dict[str, Any] | None, log: Any) -> dict[str, Any]:
     """Run a single CDP command over a fresh websocket and return its result."""
     payload = json.dumps({"id": 1, "method": method, "params": params or {}})
-    log.debug(f"cdp -> {method} {params or {}}")
+    log.debug(f"cdp -> {method} {_loggable_params(method, params)}")
     try:
         async with websockets.connect(ws_url, max_size=WS_MAX_SIZE, open_timeout=CALL_TIMEOUT_S) as ws:
             await ws.send(payload)

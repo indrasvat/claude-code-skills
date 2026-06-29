@@ -85,6 +85,27 @@ check("post-cmd-quotes-body", cmd is not None and "-f body=" in cmd)
 check("post-cmd-none-without-repo", g.post_command(None, 19, body) is None)
 check("post-cmd-none-without-number", g.post_command("o/r", None, body) is None)
 
+# --- redact_path_args: every Click spelling, no absolute path survives --------
+def no_abs(argv):
+    red = g.redact_path_args(argv)
+    return red, "/home/me" not in " ".join(red)
+
+red, clean = no_abs(["gh-attach", "--file", "/home/me/secret.png"])
+check("redact-split-long", clean and red[-1] == "secret.png")
+red, clean = no_abs(["gh-attach", "-f", "/home/me/secret.png"])
+check("redact-split-short", clean and red[-1] == "secret.png")
+red, clean = no_abs(["gh-attach", "--file=/home/me/secret.png"])
+check("redact-attached-long", clean and red[-1] == "--file=secret.png")
+red, clean = no_abs(["gh-attach", "-f/home/me/secret.png"])
+check("redact-attached-short", clean and red[-1] == "-fsecret.png")
+red, clean = no_abs(["gh-attach", "-f=/home/me/secret.png"])
+check("redact-attached-short-eq", clean and red[-1] == "-f=secret.png")
+red, clean = no_abs(["seed", "--from=/home/me/Library/Cookies"])
+check("redact-from-attached", "/home/me" not in " ".join(red) and red[-1] == "--from=Cookies")
+red = g.redact_path_args(["--json", "gh-attach", "--repo", "o/r", "--pr", "19"])
+check("redact-drops-json-keeps-rest", "--json" not in red and "--repo" in red and "o/r" in red)
+check("redact-leaves-target-id", g.redact_path_args(["-t", "ABC123"]) == ["-t", "ABC123"])
+
 # --- SAFETY: the upload path clicks nothing (issue #18 core guarantee) ---------
 js_blobs = [g.FIND_JS, g.POLL_JS, g.INPUT_JS, g.restore_js("prev value")]
 check("js-never-clicks", all(".click(" not in b for b in js_blobs))

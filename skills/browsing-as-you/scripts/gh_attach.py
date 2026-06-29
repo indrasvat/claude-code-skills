@@ -16,6 +16,7 @@ GitHub mints two URL shapes, so a generic (non-image) uploader must match both:
 """
 from __future__ import annotations
 
+import os
 import re
 import shlex
 
@@ -100,6 +101,40 @@ def comment_body(assets: list[dict]) -> str:
     """Join the per-file markdown snippets into a ready-to-post comment body."""
     parts = [a["markdown"] or a["url"] for a in assets]
     return "\n\n".join(p for p in parts if p)
+
+
+def redact_path_args(args: list[str]) -> list[str]:
+    """Drop `--json` and redact local file paths to basenames for safe logging.
+
+    Click accepts a path flag's value in several spellings — split (`--file p`,
+    `-f p`), attached-long (`--file=p`), and attached-short (`-fp`, `-f=p`). All
+    of them must be redacted, or `cdp.log` leaks a user's absolute path (the bug
+    Codex flagged on #20). Pure + stdlib so it's unit-testable without Chrome."""
+    out: list[str] = []
+    i, n = 0, len(args)
+    while i < n:
+        a = args[i]
+        if a.startswith("--json"):
+            i += 1
+            continue
+        if a in ("--file", "-f", "--from") and i + 1 < n:  # split: flag value
+            out.extend([a, os.path.basename(args[i + 1])])
+            i += 2
+            continue
+        if a.startswith(("--file=", "--from=")):            # attached long: --file=p
+            flag, _, val = a.partition("=")
+            out.append(f"{flag}={os.path.basename(val)}")
+            i += 1
+            continue
+        if a.startswith("-f") and a != "-f" and not a.startswith("--"):  # -fp / -f=p
+            rest = a[2:]
+            sep, val = ("=", rest[1:]) if rest.startswith("=") else ("", rest)
+            out.append(f"-f{sep}{os.path.basename(val)}")
+            i += 1
+            continue
+        out.append(a)
+        i += 1
+    return out
 
 
 def post_command(repo: str | None, number: int | None, body: str) -> str | None:

@@ -276,22 +276,9 @@ def _run(ctx: click.Context, coro_factory: Any, name: str) -> None:
 
 def _safe_args() -> str:
     # Redact local file paths (gh-attach --file, seed --from) to basenames so the
-    # on-disk log never records a user's absolute paths (issue #18).
-    out: list[str] = []
-    args = sys.argv[1:]
-    i = 0
-    while i < len(args):
-        a = args[i]
-        if a.startswith("--json"):
-            i += 1
-            continue
-        if a in ("--file", "-f", "--from") and i + 1 < len(args):
-            out.extend([a, os.path.basename(args[i + 1])])
-            i += 2
-            continue
-        out.append(a)
-        i += 1
-    return " ".join(out)
+    # on-disk log never records a user's absolute paths, in every Click spelling
+    # (--file p, --file=p, -fp). Logic lives in gh_attach so it's unit-tested.
+    return " ".join(gh_attach.redact_path_args(sys.argv[1:]))
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})

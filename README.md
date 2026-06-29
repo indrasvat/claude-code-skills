@@ -1,6 +1,6 @@
 # Claude Code Skills
 
-A marketplace of personal [Claude Code](https://claude.ai/code) plugins: 15 skills for AI-assisted dev workflows, plus `dootdashaa`, a glanceable statusline.
+A marketplace of personal [Claude Code](https://claude.ai/code) plugins: 16 skills for AI-assisted dev workflows, plus `dootdashaa`, a glanceable statusline.
 
 ## 🎯 Overview
 
@@ -8,7 +8,7 @@ This repository is a Claude Code marketplace exposing two independently-installa
 
 | Plugin | Install command | What it adds |
 |---|---|---|
-| **indrasvat-skills** | `/plugin install indrasvat-skills@indrasvat-skills` | 15 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, iTerm2 automation, browsing-as-you, …) |
+| **indrasvat-skills** | `/plugin install indrasvat-skills@indrasvat-skills` | 16 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, iTerm2 automation, browsing-as-you, grokery signal research, …) |
 | **dootdashaa** | `/plugin install dootdashaa@indrasvat-skills` | Single-line, Nerd-Font-icon statusline. `~9ms` p50 render budget. |
 
 Both share one `/plugin marketplace add` step (see [Installation](#installation)). Each can be installed, updated, and uninstalled on its own.
@@ -17,7 +17,7 @@ Both share one `/plugin marketplace add` step (see [Installation](#installation)
 
 Glanceable, single-line. One carrier per signal (icon, text, or colour — never two). Zero emoji. Pre-computed git cache keeps the hot path under the 300ms Claude Code debounce. See [`plugins/dootdashaa/README.md`](plugins/dootdashaa/README.md) for env-var options and the install / uninstall command list; design report is at [`plugins/dootdashaa/docs/DESIGN.html`](plugins/dootdashaa/docs/DESIGN.html).
 
-### Skills (15 total)
+### Skills (16 total)
 
 #### Universal Dev Workflow (5 new)
 
@@ -38,6 +38,12 @@ Glanceable, single-line. One carrier per signal (icon, text, or colour — never
 | **api-compat** | `/api-compat` | Detect breaking changes in protobuf, OpenAPI, GraphQL, or Go exported APIs. |
 | **rollout-check** | `/rollout-check` | Verify K8s deployment health — pods, events, HPA, logs. |
 | **crd-impact** | `/crd-impact` | Find all controllers, webhooks, RBAC, and manifests affected by a CRD change. |
+
+#### Research & Signals (1 new)
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| **grokery** 🛒 | `/grokery` | Grok-powered cross-platform signal scan (X + HN + GitHub + Reddit + Polymarket + web), engagement-ranked. A `last30days`-style brief with **no API keys or browser login** — X/Reddit/web run through the `grok` CLI. |
 
 #### Original Skills (4)
 
@@ -127,7 +133,7 @@ Inside a `claude` session, register the marketplace once and install whichever p
 ```
 /plugin marketplace add indrasvat/claude-code-skills    # once per machine
 
-# 15 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, browsing-as-you, ...)
+# 16 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, browsing-as-you, grokery, ...)
 /plugin install indrasvat-skills@indrasvat-skills
 
 # Statusline

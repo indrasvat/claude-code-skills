@@ -3,7 +3,7 @@
 
 SHELL := bash
 .DEFAULT_GOAL := help
-.PHONY: help validate validate-skills lint list clean check ci
+.PHONY: help validate validate-skills lint list clean check ci test-browsing
 
 # --- Colors (disabled when not a TTY, e.g. in CI logs) ----------------------
 ifneq (,$(findstring xterm,$(TERM))$(findstring color,$(TERM)))
@@ -29,10 +29,13 @@ help: ## Show this help
 		| awk 'BEGIN{FS=":.*?## "}{printf "  $(CYAN)%-16s$(RESET) %s\n", $$1, $$2}'
 	@printf "\n"
 
-check: lint validate ## Run everything CI runs (lint + validate)
+check: lint validate test-browsing ## Run everything CI runs (lint + validate + tests)
 ci: check ## Alias for `check`
 
 validate: validate-skills ## Run all validation
+
+test-browsing: ## Run offline tests for the browsing-as-you gh-attach helper
+	@python3 skills/browsing-as-you/scripts/test_gh_attach.py
 
 validate-skills: ## Validate every SKILL.md frontmatter (YAML parse + skills CLI cross-check)
 	@bash scripts/validate-skills.sh

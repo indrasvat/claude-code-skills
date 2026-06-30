@@ -35,6 +35,7 @@ edit, cut a branch: `feat/…`, `fix/…`, `chore/…`, or `refactor/…`.
 4. **gh-ghent discipline — as soon as the PR exists, not later:** run
    `gh ghent status --pr <N> --logs --format json --no-tui`. Fix every CI failure
    and reply-and-resolve every review thread with
-   `gh ghent reply --pr <N> --thread <id> --resolve` — never a top-level PR
-   comment. Re-run after each fix push. The PR is **not done** until gh-ghent
+   `gh ghent reply --pr <N> --thread <id> --body "…" --resolve` (a body is
+   required) — never a top-level PR comment. Re-run after each fix push. The PR
+   is **not done** until gh-ghent
    reports checks pass and 0 unresolved threads.

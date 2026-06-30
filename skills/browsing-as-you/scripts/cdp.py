@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import hashlib
 import json
 import math
@@ -49,6 +50,9 @@ import click
 import httpx
 import websockets
 from loguru import logger
+
+# Sibling stdlib-only module (same dir is sys.path[0] when run as a script).
+import gh_attach
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9222
@@ -125,9 +129,18 @@ _SENSITIVE_METHODS = {"Storage.setCookies", "Network.setCookie", "Network.setCoo
 
 
 def _loggable_params(method: str, params: dict[str, Any] | None) -> Any:
-    """Redact cookie values before they reach <state>/cdp.log."""
-    if not params or method not in _SENSITIVE_METHODS:
-        return params or {}
+    """Redact secrets before they reach <state>/cdp.log: cookie values, and the
+    local absolute file paths that DOM.setFileInputFiles carries (gh-attach must
+    not leak them — issue #18)."""
+    if not params:
+        return {}
+    if method == "DOM.setFileInputFiles":
+        safe = dict(params)
+        if isinstance(safe.get("files"), list):
+            safe["files"] = [os.path.basename(f) for f in safe["files"]]
+        return safe
+    if method not in _SENSITIVE_METHODS:
+        return params
     safe = dict(params)
     if isinstance(safe.get("cookies"), list):
         safe["cookies"] = f"[{len(safe['cookies'])} cookies redacted]"
@@ -157,6 +170,56 @@ async def _cdp(ws_url: str, method: str, params: dict[str, Any] | None, log: Any
         click.echo(f"error: CDP call '{method}' timed out; browser may be wedged "
                    f"(chrome-agent.sh recover)", err=True)
         raise SystemExit(3) from exc
+
+
+class _Session:
+    """A CDP command channel over ONE already-open websocket. Unlike `_cdp`
+    (fresh socket per call), this keeps the connection so a sequence of calls
+    shares Runtime objectIds — gh-attach resolves the file input once and reuses
+    that handle across setFileInputFiles + polls without it being GC'd."""
+
+    def __init__(self, ws: Any, log: Any) -> None:
+        self._ws, self._log, self._id = ws, log, 0
+
+    async def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        self._id += 1
+        mid = self._id
+        self._log.debug(f"cdp[session] -> {method} {_loggable_params(method, params)}")
+        await self._ws.send(json.dumps({"id": mid, "method": method, "params": params or {}}))
+        async with asyncio.timeout(CALL_TIMEOUT_S):
+            while True:
+                msg = json.loads(await self._ws.recv())
+                if msg.get("id") == mid:  # ignore interleaved CDP events
+                    if "error" in msg:
+                        raise RuntimeError(msg["error"].get("message", msg["error"]))
+                    return msg.get("result", {})
+
+
+@contextlib.asynccontextmanager
+async def _session(ws_url: str, log: Any) -> Any:
+    try:
+        async with websockets.connect(ws_url, max_size=WS_MAX_SIZE,
+                                      open_timeout=CALL_TIMEOUT_S) as ws:
+            yield _Session(ws, log)
+    except (ConnectionRefusedError, OSError) as exc:
+        _die_unreachable(ws_url, exc, log)
+    except (TimeoutError, asyncio.TimeoutError) as exc:
+        log.error(f"cdp session timeout: {exc!r}")
+        click.echo("error: CDP session timed out; browser may be wedged "
+                   "(chrome-agent.sh recover)", err=True)
+        raise SystemExit(3) from exc
+
+
+async def _session_eval(s: _Session, expr: str, log: Any, by_value: bool = True) -> Any:
+    """Runtime.evaluate on a session; returns the value (or RemoteObject dict when
+    by_value is False, e.g. to capture a node objectId)."""
+    out = await s.call("Runtime.evaluate", {
+        "expression": expr, "returnByValue": by_value, "awaitPromise": True})
+    if "exceptionDetails" in out:
+        text = out["exceptionDetails"].get("exception", {}).get("description") \
+            or out["exceptionDetails"].get("text", "eval failed")
+        raise RuntimeError(text)
+    return out.get("result", {}).get("value") if by_value else out.get("result", {})
 
 
 async def _browser_ws(host: str, port: int, log: Any) -> str:
@@ -212,7 +275,10 @@ def _run(ctx: click.Context, coro_factory: Any, name: str) -> None:
 
 
 def _safe_args() -> str:
-    return " ".join(a for a in sys.argv[1:] if not a.startswith("--json"))
+    # Redact local file paths (gh-attach --file, seed --from) to basenames so the
+    # on-disk log never records a user's absolute paths, in every Click spelling
+    # (--file p, --file=p, -fp). Logic lives in gh_attach so it's unit-tested.
+    return " ".join(gh_attach.redact_path_args(sys.argv[1:]))
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -1056,6 +1122,200 @@ def ctx_close(ctx: click.Context, context_id: str) -> None:
         log.info(f"context close {context_id}")
         _emit({"closed": context_id} if o["json"] else f"closed context {context_id}", o["json"])
     _run(ctx, run, "ctx-close")
+
+
+# --- GitHub attachment upload (safe two-phase flow, issue #18) -----------------
+# Phase 1 lives here: upload file(s) through GitHub's hidden file input over the
+# authenticated session and read back the user-attachments URL(s). This command
+# issues ZERO clicks, so the destructive controls that sit near the comment box
+# (Close / Merge / Delete / Reopen / Submit review) are unreachable by
+# construction — the failure mode that motivated #18 (a broad submit selector
+# clicking Close) cannot happen here. It fails closed: if a URL never appears it
+# restores the composer and exits non-zero. Phase 2 (posting the comment) is the
+# agent's job via the printed `gh api` line — never a browser button.
+
+
+async def _gh_attach_wait_url(s: _Session, before: str, timeout: float, log: Any) -> str | None:
+    """Poll the composer until a NEW user-attachments URL appears (or timeout)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            val = await _session_eval(s, gh_attach.POLL_JS, log) or ""
+        except RuntimeError as exc:
+            log.debug(f"gh-attach poll transient: {exc!r}")
+            val = ""
+        urls = gh_attach.new_asset_urls(before, val)
+        if urls:
+            return urls[0]
+        await asyncio.sleep(0.5)
+    return None
+
+
+async def _gh_attach_upload(ws_url: str, paths: list[str], tinfo: dict | None,
+                            upload_timeout: float, log: Any) -> tuple[list[dict], list[str], dict | None]:
+    """One CDP session: find the composer, upload each file, read back its URL,
+    then restore the composer. Returns (assets, failed, resolved tinfo)."""
+    assets: list[dict] = []
+    failed: list[str] = []
+    async with _session(ws_url, log) as s:
+        await s.call("DOM.enable", {})
+        # Bare -t with no --repo/--url: learn repo/number from the live URL so we
+        # can still print a working `gh api` line.
+        if tinfo is None or tinfo.get("repo") is None:
+            href = await _session_eval(s, "location.href", log)
+            try:
+                tinfo = gh_attach.resolve_target(None, None, None, str(href))
+            except gh_attach.TargetError:
+                tinfo = {"url": str(href), "repo": None, "kind": None, "number": None}
+        find = await _session_eval(s, gh_attach.FIND_JS, log)
+        if not isinstance(find, dict) or not find.get("ok"):
+            reason = find.get("reason", "unknown") if isinstance(find, dict) else "unknown"
+            hint = ""
+            if reason == "no-comment-editor":
+                hint = (" — no comment box found. Likely not logged in to GitHub, lacking "
+                        "comment permission, or a non-<textarea> composer. Verify auth: "
+                        "cdp.py probe <url> --front, then seed/login github.com.")
+            elif reason == "no-file-input":
+                hint = " — comment box found but no attachment input; cannot upload."
+            click.echo(f"error: gh-attach fail-closed ({reason}){hint}", err=True)
+            raise SystemExit(2)
+        original = find.get("original", "") or ""
+        try:
+            for path in paths:
+                base = os.path.basename(path)
+                before = await _session_eval(s, gh_attach.POLL_JS, log) or ""
+                inp = await _session_eval(s, gh_attach.INPUT_JS, log, by_value=False)
+                obj = inp.get("objectId") if isinstance(inp, dict) else None
+                if not obj:
+                    log.warning(f"gh-attach lost the file input before {base}")
+                    failed.append(base)
+                    continue
+                await s.call("DOM.setFileInputFiles", {"objectId": obj, "files": [path]})
+                url = await _gh_attach_wait_url(s, before, upload_timeout, log)
+                if not url:
+                    failed.append(base)
+                    continue
+                after = await _session_eval(s, gh_attach.POLL_JS, log) or ""
+                assets.append({"path": base, "url": url,
+                               "markdown": gh_attach.inserted_segment(before, after)})
+        finally:
+            # Leave the page untouched, success or fail.
+            try:
+                await _session_eval(s, gh_attach.restore_js(original), log)
+            except RuntimeError as exc:
+                log.warning(f"gh-attach could not restore composer: {exc!r}")
+    return assets, failed, tinfo
+
+
+@cli.command(name="gh-attach")
+@click.option("--repo", default=None, help="OWNER/REPO (pair with --issue or --pr).")
+@click.option("--issue", default=None, type=int, help="Issue number (-> /issues/N).")
+@click.option("--pr", default=None, type=int, help="PR number (-> /pull/N).")
+@click.option("--url", default=None, help="Full GitHub issue/PR URL (overrides --repo/--issue/--pr).")
+@click.option("-f", "--file", "files", multiple=True, required=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="Local file to upload — any type, repeatable. Not image-only.")
+@click.option("-t", "--target", default=None,
+              help="Use an existing tab (don't open/close one). Navigated to the "
+                   "target if --repo/--url is also given, else used as-is.")
+@click.option("--keep", is_flag=True, help="Leave a tab we opened open (default: close it).")
+@click.option("--upload-timeout", default=90.0, show_default=True, type=float,
+              help="Max seconds to wait for each file's attachment URL.")
+@click.option("--load-timeout", default=25.0, show_default=True, type=float,
+              help="Max seconds to wait for the page to load.")
+@click.option("--allow-submit", is_flag=True,
+              help="(refused on purpose) posting via the browser is unsafe — use the gh api line.")
+@click.pass_context
+def gh_attach_cmd(ctx: click.Context, repo: str | None, issue: int | None, pr: int | None,
+                  url: str | None, files: tuple[str, ...], target: str | None, keep: bool,
+                  upload_timeout: float, load_timeout: float, allow_submit: bool) -> None:
+    """Upload file(s) to a GitHub issue/PR and print the user-attachments URLs —
+    WITHOUT posting a comment or clicking any page button (issue #18).
+
+    Phase 1 (this command): set the files on GitHub's hidden file input over the
+    authenticated session and read back the URL(s). Zero clicks, so Close / Merge
+    / Delete / Submit-review are never touched; fails closed (restoring the
+    composer) if a URL doesn't appear.
+
+    Phase 2 (you): post the comment with the printed `gh api ...` line.
+
+    Examples:
+      cdp.py --json gh-attach --repo o/r --pr 19 -f a.png -f b.log
+      cdp.py gh-attach --url https://github.com/o/r/issues/123 -f trace.txt
+    """
+    async def run(o: Any, log: Any) -> None:
+        if allow_submit:
+            click.echo("error: --allow-submit is intentionally unsupported. Clicking GitHub "
+                       "page buttons to post is unsafe (Close/Merge sit beside Comment). "
+                       "Upload here, then post via the printed `gh api` line.", err=True)
+            raise SystemExit(2)
+
+        tinfo: dict | None = None
+        if url or repo:
+            try:
+                tinfo = gh_attach.resolve_target(repo, issue, pr, url)
+            except gh_attach.TargetError as exc:
+                click.echo(f"error: {exc}", err=True)
+                raise SystemExit(2)
+        elif not target:
+            click.echo("error: pass --repo OWNER/REPO with --issue/--pr, or --url, or "
+                       "-t <tab already on the issue/PR page>", err=True)
+            raise SystemExit(2)
+
+        paths = [os.path.abspath(f) for f in files]
+
+        opened = None
+        if target:
+            page = await _resolve_page(o["host"], o["port"], target, o["strict"], log)
+            if tinfo:
+                await _cdp(page["webSocketDebuggerUrl"], "Page.navigate", {"url": tinfo["url"]}, log)
+                await _wait_ready(o["host"], o["port"], page["id"], load_timeout, o["strict"], log)
+        else:
+            bws = await _browser_ws(o["host"], o["port"], log)
+            res = await _cdp(bws, "Target.createTarget",
+                             {"url": tinfo["url"], "background": True}, log)  # type: ignore[index]
+            opened = res["targetId"]
+            await _wait_ready(o["host"], o["port"], opened, load_timeout, o["strict"], log, await_nav=True)
+            page = await _resolve_page(o["host"], o["port"], opened, o["strict"], log)
+
+        try:
+            assets, failed, tinfo = await _gh_attach_upload(
+                page["webSocketDebuggerUrl"], paths, tinfo, upload_timeout, log)
+        finally:
+            if opened and not keep:
+                try:
+                    bws = await _browser_ws(o["host"], o["port"], log)
+                    await _cdp(bws, "Target.closeTarget", {"targetId": opened}, log)
+                except (RuntimeError, SystemExit) as exc:
+                    log.warning(f"gh-attach could not close target {opened}: {exc!r}")
+
+        repo_out = tinfo.get("repo") if tinfo else None
+        number_out = tinfo.get("number") if tinfo else None
+        body = gh_attach.comment_body(assets)
+        post = gh_attach.post_command(repo_out, number_out, body) if body else None
+        result = {
+            "target": tinfo.get("url") if tinfo else page.get("url"),
+            "repo": repo_out, "kind": tinfo.get("kind") if tinfo else None,
+            "number": number_out, "submitted": False,
+            "assets": assets, "failed": failed,
+            "comment_body": body, "post_command": post,
+        }
+        log.info(f"gh-attach uploaded={len(assets)} failed={len(failed)} target={result['target']}")
+        if o["json"]:
+            _emit(result, True)
+        else:
+            for a in assets:
+                click.echo(f"  {a['path']}  ->  {a['url']}")
+            if failed:
+                click.echo(f"  failed: {', '.join(failed)}", err=True)
+            if post:
+                click.echo("\npost the comment (no page button is clicked):")
+                click.echo(f"  {post}")
+            click.echo("\n⚠ never click GitHub submit buttons via the browser — "
+                       "Close/Merge/Delete sit next to them. Post via gh api above.")
+        if failed or not assets:
+            raise SystemExit(2)
+    _run(ctx, run, "gh-attach")
 
 
 if __name__ == "__main__":

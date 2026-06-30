@@ -37,6 +37,15 @@ Triage: `health` → `ok|down|wedged` (exit 0|3|4) · `doctor` for diagnostics �
 `recover` a wedged one · `stop`/`kill` touch only the bridge profile (your real
 Chrome is safe). Full table + runbook: `reference/integration.md`.
 
+> **Agent: bring it up yourself — don't bail, don't ask.** If you land mid-task
+> and `health` is `down`/`wedged`, just run `start` (idempotent, concurrent-safe)
+> and, for a cookie site, `seed` (prompt-free — see §2); then carry on and
+> actually drive the browser. Reporting "the bridge was down" as a blocker, or
+> asking the user to start it, defeats the whole point of the skill. The user
+> should not be pinged for perms. The **only** human step is `login` (typing a
+> password), and only for the localStorage/SSO sites flagged in §2 — never for
+> plain cookie sites like GitHub.
+
 ## 2. Authenticate (the bridge starts logged out)
 
 It uses a **dedicated profile** — it must, since Chrome 136 ignores the debug
@@ -87,6 +96,7 @@ http://127.0.0.1:9222`; setup in `reference/integration.md`). Or `scripts/cdp.py
 | **trusted type** (into focused / a selector) | `cdp.py type 'hello' -t <id>` · `type 'us-east' --into '[role=combobox]' --enter -t <id>` |
 | **trusted key** (Enter/Tab/Arrow…) | `cdp.py key ArrowDown -t <id>` · `key Enter -t <id>` |
 | **auth probe** (is it really logged in?) | `cdp.py probe <url> --front` → `login-wall \| likely-authed \| unknown` |
+| **upload files to a GitHub issue/PR** (no submit click) | `cdp.py --json gh-attach --repo o/r --pr 19 -f a.png -f b.log` → asset URLs |
 | foreground · close · sweep blanks | `cdp.py front -t <id>` · `close <id>` · `gc` |
 | isolated context | `cdp.py ctx new` → `open <url> --context <id>` → `ctx close <id>` |
 
@@ -98,6 +108,39 @@ widgets, and native checkboxes that ignore synthetic `eval`-dispatched events.
 `--json` (before the subcommand) for machine-readable output. **Concurrency:**
 each agent owns its `targetId` and passes `-t`; set `CHROME_AGENT_STRICT=1` to
 make `eval`/`nav` refuse an implicit tab. Full rules: `reference/integration.md`.
+
+## GitHub attachments — safe two-phase upload
+
+To attach local files (screenshots, logs, **any** file type) to a GitHub issue
+or PR without committing binaries to the repo, **never** drive the page's submit
+button: GitHub puts **Close / Merge / Delete / Reopen / Submit-review** controls
+right next to the comment box, and a broad "first enabled submit" selector can
+click a destructive one after the upload. Split it in two:
+
+**Phase 1 — upload only (browser), prints the `user-attachments` URLs:**
+
+```bash
+cdp.py --json gh-attach --repo OWNER/REPO --pr 19 -f ./shot-1.png -f ./trace.log
+#   --issue N for issues · --url <full link> · -t <tab already on the page>
+```
+
+`gh-attach` sets the files on GitHub's hidden file input over CDP and reads the
+URL(s) back from the composer — it issues **zero clicks**, so destructive
+controls are unreachable by construction. It **fails closed**: if the comment
+box isn't found (logged out / no permission) or a URL never appears, it restores
+the composer, leaves the page untouched, and exits non-zero. It uploads any file
+type (`assets/<uuid>` for images, `files/<n>/<name>` otherwise); it never posts.
+
+**Phase 2 — post the comment yourself via the API** (no page button). `gh-attach`
+prints the ready line; it uses the issues endpoint (PR comments included):
+
+```bash
+gh api repos/OWNER/REPO/issues/19/comments -f body="$(...uploaded markdown...)"
+```
+
+> Posting through the browser is intentionally unsupported — `--allow-submit` is
+> refused. Treat PR Close/Merge/Reopen/Delete as out of scope unless the user
+> explicitly asks. Self-test the helper logic with `make test-browsing`.
 
 ## Guardrails
 

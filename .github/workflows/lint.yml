@@ -37,3 +37,16 @@ jobs:
       # ubuntu-latest; the script installs js-yaml on demand.
       - name: Validate skills
         run: make validate-skills
+
+  test-browsing:
+    name: Test browsing-as-you
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+
+      # Offline, stdlib-only tests for the gh-attach upload helper (issue #18):
+      # pure URL/extraction logic + the structural guarantee that the upload path
+      # clicks nothing. No browser, no uv, no deps — python3 ships on ubuntu.
+      - name: Run make test-browsing
+        run: make test-browsing

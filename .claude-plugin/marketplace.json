@@ -4,12 +4,12 @@
     "name": "indrasvat",
     "url": "https://github.com/indrasvat"
   },
-  "description": "15 Claude Code skills for dev workflows, CI/CD, Kubernetes, browser automation, and AI-assisted development",
+  "description": "16 Claude Code skills for dev workflows, CI/CD, Kubernetes, browser automation, skill authoring, and AI-assisted development",
   "plugins": [
     {
       "name": "indrasvat-skills",
       "source": "./",
-      "description": "15 Claude Code skills for dev workflows, CI/CD, Kubernetes, browser automation, and AI-assisted development",
+      "description": "16 Claude Code skills for dev workflows, CI/CD, Kubernetes, browser automation, skill authoring, and AI-assisted development",
       "category": "productivity"
     },
     {

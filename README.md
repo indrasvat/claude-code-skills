@@ -1,6 +1,6 @@
 # Claude Code Skills
 
-A marketplace of personal [Claude Code](https://claude.ai/code) plugins: 15 skills for AI-assisted dev workflows, plus `dootdashaa`, a glanceable statusline.
+A marketplace of personal [Claude Code](https://claude.ai/code) plugins: 16 skills for AI-assisted dev workflows, plus `dootdashaa`, a glanceable statusline.
 
 ## 🎯 Overview
 
@@ -8,7 +8,7 @@ This repository is a Claude Code marketplace exposing two independently-installa
 
 | Plugin | Install command | What it adds |
 |---|---|---|
-| **indrasvat-skills** | `/plugin install indrasvat-skills@indrasvat-skills` | 15 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, iTerm2 automation, browsing-as-you, …) |
+| **indrasvat-skills** | `/plugin install indrasvat-skills@indrasvat-skills` | 16 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, iTerm2 automation, browsing-as-you, skill authoring, …) |
 | **dootdashaa** | `/plugin install dootdashaa@indrasvat-skills` | Single-line, Nerd-Font-icon statusline. `~9ms` p50 render budget. |
 
 Both share one `/plugin marketplace add` step (see [Installation](#installation)). Each can be installed, updated, and uninstalled on its own.
@@ -17,7 +17,7 @@ Both share one `/plugin marketplace add` step (see [Installation](#installation)
 
 Glanceable, single-line. One carrier per signal (icon, text, or colour — never two). Zero emoji. Pre-computed git cache keeps the hot path under the 300ms Claude Code debounce. See [`plugins/dootdashaa/README.md`](plugins/dootdashaa/README.md) for env-var options and the install / uninstall command list; design report is at [`plugins/dootdashaa/docs/DESIGN.html`](plugins/dootdashaa/docs/DESIGN.html).
 
-### Skills (15 total)
+### Skills (16 total)
 
 #### Universal Dev Workflow (5 new)
 
@@ -118,6 +118,12 @@ One persistent, already-authenticated Chrome that every agent and sub-agent atta
 
 **Platform:** macOS (Linux supported except `seed`, which needs `login`). Needs `uv`; chrome-devtools-mcp integration needs Node 22+.
 
+#### Meta / Authoring (1 new)
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| **skillwright** | `/skillwright` | Author skills the harness-engineering way — trigger contract, degree-of-freedom calibration, progressive disclosure, prose→machinery hardening, and this collection's conventions. Auto-loads when you write or improve a skill. |
+
 ## Installation
 
 ### Via Claude Code Plugin (Recommended)
@@ -127,7 +133,7 @@ Inside a `claude` session, register the marketplace once and install whichever p
 ```
 /plugin marketplace add indrasvat/claude-code-skills    # once per machine
 
-# 15 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, browsing-as-you, ...)
+# 16 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, browsing-as-you, ...)
 /plugin install indrasvat-skills@indrasvat-skills
 
 # Statusline
@@ -289,10 +295,13 @@ claude-code-skills/
 │   │   └── examples/
 │   ├── cf-edge/SKILL.md        # Cloudflare deployment
 │   ├── coderabbit/SKILL.md     # AI code reviews
-│   └── browsing-as-you/          # Shared authenticated Chrome over CDP
+│   ├── browsing-as-you/          # Shared authenticated Chrome over CDP
+│   │   ├── SKILL.md
+│   │   ├── scripts/{chrome-agent.sh,cdp.py}
+│   │   └── reference/{integration.md,launchd.md}
+│   └── skillwright/              # Meta-skill: author skills the harness way
 │       ├── SKILL.md
-│       ├── scripts/{chrome-agent.sh,cdp.py}
-│       └── reference/{integration.md,launchd.md}
+│       └── references/{hardening.md,conventions.md,checklist.md}
 ├── README.md
 ├── LICENSE                      # MIT License
 ├── bin/

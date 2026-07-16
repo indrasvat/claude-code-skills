@@ -9,7 +9,7 @@ description: >
   degree-of-freedom calibration, progressive disclosure, converting prose into
   machinery (references/hardening.md), this collection's conventions
   (references/conventions.md), and the ship checklist (references/checklist.md).
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+allowed-tools: Bash, Read, Grep, Glob
 argument-hint: [skill-name | "what it should do"]
 ---
 

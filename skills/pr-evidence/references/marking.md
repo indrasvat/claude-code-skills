@@ -28,11 +28,12 @@ mark is missed; a loud one looks pasted on and hides what it points at.
 
 ## Placing marks
 
-Mark by terminal cell, read off the pane's text:
+Mark by terminal cell, read off the same pane's text, on that pane's own
+snapshot (a window snapshot adds borders, so its cells are offset):
 
 ```bash
-shux pane capture -s S -p P | grep -n 'orphaned'      # grep -n is 1-based: row = n-1
-uv run "$S/scripts/evidence_img.py" mark frame.png -o marked.png \
+shux pane capture -s ev -p "$P" | grep -n 'orphaned'   # grep -n is 1-based: row = n-1
+uv run "$S/scripts/evidence_img.py" mark still.png -o marked.png \
   --scale 2 --cell 9x19 --title "PR #123" \
   --box 51,12,34,1,bad,"4 programs orphaned" --box 51,13,34,1,good,"none orphaned"
 ```

@@ -16,19 +16,18 @@
 #   -c  compose the window at this size, e.g. 160x30 (window recordings only)
 #   -f  capture rate, frames per second (default 4)
 #   -x  playback speed: 1 = real time, 1.5 = 1.5x faster (default 1.5)
-#   -k  keep the PNG frames in this directory (default: deleted)
 #
 # Playback speed is true: frames are encoded at the rate they were actually
 # captured, times -x, so a 10 s event plays in 10/x s whatever the snapshot cost.
 set -euo pipefail
 
-session="" window="" pane="" out="" stopfile="" seconds="" fps=4 speed=1.5 keep="" size=""
-while getopts "s:w:p:o:u:t:c:f:x:k:" opt; do
+session="" window="" pane="" out="" stopfile="" seconds="" fps=4 speed=1.5 size=""
+while getopts "s:w:p:o:u:t:c:f:x:" opt; do
   case "$opt" in
     s) session=$OPTARG ;; w) window=$OPTARG ;; p) pane=$OPTARG ;; o) out=$OPTARG ;;
     u) stopfile=$OPTARG ;; t) seconds=$OPTARG ;; f) fps=$OPTARG ;; x) speed=$OPTARG ;;
-    k) keep=$OPTARG ;; c) size=$OPTARG ;;
-    *) sed -n '2,20p' "$0" >&2; exit 2 ;;
+    c) size=$OPTARG ;;
+    *) sed -n '2,19p' "$0" >&2; exit 2 ;;
   esac
 done
 [ -n "$session" ] && [ -n "$out" ] && [ -n "$seconds" ] || {
@@ -36,16 +35,15 @@ done
 shux=${SHUX_BIN:-shux}
 [ -n "$pane" ] && [ -n "$size" ] && {
   echo "record.sh: -c sizes a window recording; a pane records at its own size" >&2; exit 2; }
-tools=("$shux" ffmpeg ffprobe perl)
-for tool in "${tools[@]}"; do
+for tool in "$shux" ffmpeg ffprobe perl; do
   command -v "$tool" >/dev/null || { echo "record.sh: $tool not found" >&2; exit 2; }
 done
 
-sized=()
+sized=() win=()
 [ -n "$size" ] && sized=(--cols "${size%x*}" --rows "${size#*x}")
+[ -n "$window" ] && win=(-w "$window")
 frames=$(mktemp -d)
-cleanup() { [ -z "$keep" ] && rm -rf "$frames"; return 0; }
-trap cleanup EXIT
+trap 'rm -rf "$frames"' EXIT
 
 now() { perl -MTime::HiRes=time -e 'printf "%.3f\n", time()'; }
 interval=$(awk -v f="$fps" 'BEGIN{printf "%.3f", 1/f}')
@@ -57,10 +55,8 @@ while :; do
   file=$(printf '%s/%05d.png' "$frames" "$n")
   if [ -n "$pane" ]; then
     "$shux" pane snapshot -s "$session" -p "$pane" -o "$file" >/dev/null
-  elif [ -n "$window" ]; then
-    "$shux" window snapshot -s "$session" -w "$window" ${sized[@]+"${sized[@]}"} -o "$file" >/dev/null
   else
-    "$shux" window snapshot -s "$session" ${sized[@]+"${sized[@]}"} -o "$file" >/dev/null
+    "$shux" window snapshot -s "$session" ${win[@]+"${win[@]}"} ${sized[@]+"${sized[@]}"} -o "$file" >/dev/null
   fi
   [ -s "$file" ] || { echo "record.sh: snapshot $n is empty" >&2; exit 1; }
   n=$((n + 1))
@@ -73,9 +69,8 @@ elapsed=$(awk -v a="$start" -v b="$(now)" 'BEGIN{printf "%.3f", b-a}')
 
 captured=$(awk -v n="$n" -v e="$elapsed" 'BEGIN{printf "%.4f", n/e}')
 rate=$(awk -v c="$captured" -v x="$speed" 'BEGIN{printf "%.4f", c*x}')
-# Even dimensions for yuv420p; never upscale here (crisp source pixels).
-# Pin the H.264 level: left alone, x264 can pick 6.x, which iPhone Safari will
-# not decode (it shows a crossed-out play button) while desktop Chrome plays it.
+# Even dimensions for yuv420p; never upscale (crisp source pixels). Pin the
+# level: left alone, x264 can pick 6.x (see check_video.sh).
 IFS=x read -r w h < <(ffprobe -v error -select_streams v:0 -show_entries stream=width,height \
   -of csv=s=x:p=0 "$frames/00000.png")
 level=4.2
@@ -84,7 +79,6 @@ ffmpeg -hide_banner -loglevel error -y -framerate "$rate" -i "$frames/%05d.png" 
   -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black" \
   -c:v libx264 -profile:v high -level:v "$level" -preset slow -crf 16 \
   -pix_fmt yuv420p -movflags +faststart "$out"
-"$(dirname "$0")/check_video.sh" "$out" "${out%.*}.poster.png"
-[ -n "$keep" ] && { mkdir -p "$keep"; cp "$frames"/*.png "$keep"/; }
+bash "$(dirname "$0")/check_video.sh" "$out"
 printf 'record.sh: %d frames over %.1fs (%.2f fps captured) -> %s at %sx, %.1fs long\n' \
   "$n" "$elapsed" "$captured" "$out" "$speed" "$(awk -v e="$elapsed" -v x="$speed" 'BEGIN{print e/x}')"

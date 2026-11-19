@@ -18,8 +18,9 @@ out=$(cd "$out" && pwd)
 auth="${CODEX_HOME:-$HOME/.codex}/auth.json"
 [ -f "$auth" ] || { echo "run.sh: no Codex login at $auth (run codex login)" >&2; exit 2; }
 
-codex_home="$out/codex-home"
-mkdir -p "$codex_home"
+# A fresh 0700 dir per run, gone on any exit: the copy never outlives the run.
+codex_home=$(mktemp -d "$out/.codex-home.XXXXXX")
+trap 'rm -rf "$codex_home"' EXIT
 python3 -I - "$auth" "$codex_home/auth.json" <<'EOF'
 import json, os, sys
 a = json.load(open(sys.argv[1]))
@@ -33,5 +34,4 @@ EOF
 docker build -t pr-evidence-linux "$repo/tests/pr-evidence"
 docker run --rm -v "$repo:/repo:ro" -v "$out:/out" -v "$codex_home:/codex-home" \
   pr-evidence-linux bash /repo/tests/pr-evidence/agent/in-container.sh
-rm -f "$codex_home/auth.json"
 printf 'run.sh: done; read %s/evidence.md and %s/last.md\n' "$out" "$out"

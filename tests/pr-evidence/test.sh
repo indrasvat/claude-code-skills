@@ -48,6 +48,15 @@ expect "rejects a clip without faststart" 1 'faststart' -- bash "$S/scripts/chec
 ffmpeg -v error -y -f lavfi -i testsrc2=s=320x240:r=15 -t 2 \
   -vf "setpts='if(lt(N,10),N/15,10/15+(N-10)/4)/TB'" -fps_mode vfr "${ENC[@]}" -movflags +faststart vfr.mp4
 expect "rejects a variable frame rate" 1 'frame rate' -- bash "$S/scripts/check_video.sh" vfr.mp4
+ffmpeg -v error -y -i good.mp4 -c copy -metadata title=moov mkv.mkv && mv mkv.mkv mkv.mp4
+expect "rejects a Matroska file named .mp4" 1 'container' -- bash "$S/scripts/check_video.sh" mkv.mp4
+ffmpeg -v error -y -f lavfi -i testsrc2=s=640x360:r=30 -t 4 "${ENC[@]}" -level:v 4.2 -movflags +faststart big.mp4
+cp big.mp4 corrupt.mp4
+python3 -I -c 'import sys,os; p=sys.argv[1]; n=os.path.getsize(p); f=open(p,"r+b"); f.seek(n*6//10); f.write(bytes(n-n*6//10))' corrupt.mp4
+expect "rejects a clip whose frames do not decode" 1 'decode' -- bash "$S/scripts/check_video.sh" corrupt.mp4
+ffmpeg -v error -y -f lavfi -i testsrc2=s=1920x1080:r=90 -t 0.5 "${ENC[@]}" -level:v 4.2 -movflags +faststart fast.mp4
+expect "rejects 1080p90 that overruns level 4.2's macroblock rate" 1 'macroblocks' -- bash "$S/scripts/check_video.sh" fast.mp4
+expect "usage error exits 2" 2 'usage' -- bash "$S/scripts/check_video.sh"
 
 section "evidence_img.py: marks on stills"
 ffmpeg -v error -y -f lavfi -i color=c=0x1e1e2e:s=720x456 -frames:v 1 frame.png
@@ -69,7 +78,19 @@ h=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default
 check "video marks get a legend bar above the frame ($h px)" test "${h:-0}" -gt 240
 expect "builds a frame sheet to read a video without playing it" 0 'wrote' -- \
   uv run -q "$S/scripts/evidence_video.py" sheet stacked.mp4 -o sheet.png --frames 6
-check "sheet is written" test -s sheet.png
+ffmpeg -v error -y -f lavfi -i testsrc2=s=321x240:r=15 -t 1 -c:v libx264 -pix_fmt yuv444p odd.mp4
+expect "stacks an odd-width 4:4:4 clip over a 4:2:0 one" 0 '^check_video: PASS' -- \
+  uv run -q "$S/scripts/evidence_video.py" stack odd.mp4 base.mp4 -o odd-stack.mp4 --labels a b
+ffmpeg -v error -y -f lavfi -i testsrc2=s=320x240:r=15:d=1 -f lavfi -i sine=d=3 "${ENC[@]}" -c:a aac audio3.mp4
+expect "holds to the longer clip's video, not its audio" 0 '^check_video: PASS' -- \
+  uv run -q "$S/scripts/evidence_video.py" stack audio3.mp4 base.mp4 -o av-stack.mp4 --labels a b
+dur=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 av-stack.mp4 2>/dev/null)
+check "audio-padded stack lasts the 2 s of video ($dur s)" awk -v d="${dur:-0}" 'BEGIN{exit !(d>=1.9 && d<=2.2)}'
+ffmpeg -v error -y -f lavfi -i testsrc2=s=320x240:r=4 -t 1 "${ENC[@]}" short.mp4
+expect "builds a sheet of a 1 s, 4 fps clip" 0 'wrote' -- \
+  uv run -q "$S/scripts/evidence_video.py" sheet short.mp4 -o short-sheet.png --frames 9
+expect "refuses a reversed mark range" 2 'from' -- \
+  uv run -q "$S/scripts/evidence_video.py" mark good.mp4 -o rev.mp4 --from 1.5 --to 0.5 --box 1,1,9,9,bad,x
 
 section "check_evidence.sh: the gate before posting"
 cp good.mp4 demo.mp4 && cp marked.png still.png
@@ -85,22 +106,35 @@ git init -q repo && cp still.png repo/ && printf '![s](./still.png)\n' >repo/ev.
 git -C repo add still.png
 in_repo() { (cd repo && bash "$S/scripts/check_evidence.sh" ev.md); }
 expect "rejects an artifact tracked by git" 1 'tracked' -- in_repo
+printf '<video src=\x27gone.mp4\x27></video>\n<source src = "gone2.MP4">\n![ref][r]\n\n[r]: ./gone3.png\n' >html.md
+expect "finds HTML and reference-style artifacts" 1 'artifacts=3' -- bash "$S/scripts/check_evidence.sh" html.md
+# shellcheck disable=SC2016  # literal markdown, backticks included
+printf '![d](./demo.mp4?raw=1#t=2)\n![s](<./still.png> "a title")\n\n```\n![x](./not-real.png)\n```\n' >tricky.md
+expect "strips query/fragment and skips code blocks" 0 '^check_evidence: PASS' -- bash "$S/scripts/check_evidence.sh" tricky.md
+printf 'token ghp_%s\n' "abcdefghijklmnopqrstuvwxyz0123456789" >tok.md
+expect "rejects a token-shaped string" 1 'token' -- bash "$S/scripts/check_evidence.sh" tok.md
+expect "fails closed when HOME is unset" 1 'HOME' -- env -u HOME bash "$S/scripts/check_evidence.sh" ev.md
+expect "usage error exits 2" 2 'usage' -- bash "$S/scripts/check_evidence.sh"
 
 section "doctor.sh: the preflight contract"
 expect "prints the contract line and the skill dir" 0 "^doctor: core=ok .* skill=$S\$" -- bash "$S/scripts/doctor.sh"
+expect "checks the shux binary SHUX_BIN names" 0 'terminal=missing' -- env SHUX_BIN=/no/such/shux bash "$S/scripts/doctor.sh"
 
 section "record.sh + observe.sh over shux"
 if command -v shux >/dev/null; then
+  unset SHUX_SOCKET  # it outranks XDG_RUNTIME_DIR: never touch the caller's daemon
   export XDG_RUNTIME_DIR="$W/rt"
+  trap 'shux daemon stop >/dev/null 2>&1; rm -r -f "$W"' EXIT
   stop="$W/obs.stop"
   shux session create ev -d --cwd "$W" -- bash "$S/scripts/observe.sh" -u "$stop" -i 0.3 -- 'needle::echo observing' >/dev/null
   shux pane wait-for -s ev --text observing --timeout-ms 10000 >/dev/null
   ( sleep 3; touch "$stop" ) &
-  # Inside a shux pane SHUX=1 is set; record.sh must not take it for a binary.
   expect "records a window to a phone-safe mp4 (SHUX=1 in env)" 0 '^check_video: PASS' -- \
     env SHUX=1 bash "$S/scripts/record.sh" -s ev -o rec.mp4 -u "$stop" -t 20 -f 4 -x 1
   wait
   shux session kill ev >/dev/null 2>&1; shux daemon stop >/dev/null 2>&1
+elif [ -n "${REQUIRE_SHUX:-}" ]; then
+  ko "shux not installed (REQUIRE_SHUX is set)"
 else
   sk "shux not installed"
 fi

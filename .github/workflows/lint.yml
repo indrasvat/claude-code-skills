@@ -62,6 +62,7 @@ jobs:
       # gate and composition, uv for the Pillow scripts, shux for recording.
       # uv and shux are pinned; the shux installer verifies its checksum.
       - name: Install ffmpeg, fonts, uv and shux
+        shell: bash  # -eo pipefail: a failed download fails the step, not just curl
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg fontconfig fonts-dejavu-core
@@ -70,4 +71,6 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run make test-pr-evidence
+        env:
+          REQUIRE_SHUX: "1"  # the recorder test must run here, never skip
         run: make test-pr-evidence

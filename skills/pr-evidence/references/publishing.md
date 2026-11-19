@@ -2,17 +2,10 @@
 
 ## The evidence comment
 
-One comment, posted as soon as the PR is open. Start from
-`$S/assets/evidence-comment.md`; its shape:
-
-- A heading naming both builds: `## Evidence: before (v1.2.0) and after (this PR)`.
-- One sentence: what the reader is about to see, on what workload.
-- The strongest artifact first: the video for dynamic changes, the marked zoom
-  for static ones.
-- A table of behaviour, base vs branch, in words; numbers go here, beside the
-  frames that show them.
-- One marked still per point, each with a one-line caption naming both builds.
-- **How it was captured:** binaries, workload, size, speed, in one line.
+One comment, posted as soon as the PR is open, filled in from
+`$S/assets/evidence-comment.md`. Lead with the strongest artifact (the video
+for dynamic changes, the marked zoom for static ones); numbers go in the
+table, beside the frames that show them.
 
 No transcript, no test lists, no "CI green": the PR body and checks carry those.
 
@@ -48,17 +41,13 @@ committing the files.
    the exact uploaded file does. If the user can, ask them to open it on a phone.
 3. Each artifact shows its point with no other context: the change's nature,
    not the script's verdict.
-4. Both builds are named; the before really is the base.
-5. Colour, real content, no empty or loading frames, no tofu.
-6. Marks pass the check in `marking.md`.
-7. The evidence matches the final commit.
+4. Marks pass the check in `marking.md`.
 
 ## Rules
 
 - Never commit evidence: no PNG or MP4 in the repo, no links to ignored
   paths, no `raw.githubusercontent` links to committed binaries. A committed
   image is justified only as a test baseline something diffs against.
-- Never cite local paths in the PR; reviewers cannot open them.
 - Replace, do not stack: when evidence is re-recorded, edit the comment
   (`gh api -X PATCH repos/O/R/issues/comments/ID -F body=@evidence.md` after
   uploading the new files), so the PR shows one current set.

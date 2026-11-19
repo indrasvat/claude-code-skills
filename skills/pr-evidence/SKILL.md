@@ -57,8 +57,8 @@ media. Worked examples and traps: `references/choosing-the-medium.md`.
    content. Clips show cause, event, consequence: usually 15–60 s at 1.5×.
 5. **Final code only.** Capture after the last review fix; re-capture on change.
 6. **Never committed, never private:** no local paths, hosts, tokens, third parties.
-7. **Plays on a phone.** H.264 High ≤ 4.2, yuv420p, constant rate, faststart,
-   and a poster (first frame) that shows the subject. `check_video.sh` decides.
+7. **Plays on a phone:** H.264 High 4.2 (5.1 over ~2.2 MP), yuv420p, constant
+   rate, faststart, a first frame showing the subject. `check_video.sh` decides.
 8. **Repo protocol wins** (CLAUDE.md, AGENTS.md, CONTRIBUTING) where it differs.
 
 ## 3. Workflow

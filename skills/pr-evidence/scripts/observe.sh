@@ -25,7 +25,7 @@ while getopts "u:i:" opt; do
 done
 shift $((OPTIND - 1))
 [ "${1:-}" = "--" ] && shift
-[ -n "$stopfile" ] && [ "$#" -gt 0 ] || { sed -n '2,15p' "$0" >&2; exit 2; }
+[ -n "$stopfile" ] && [ "$#" -gt 0 ] || { sed -n '2,19p' "$0" >&2; exit 2; }
 
 C=$'\e[36m' B=$'\e[1m' D=$'\e[2m' X=$'\e[0m' K=$'\e[K'
 start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time()')

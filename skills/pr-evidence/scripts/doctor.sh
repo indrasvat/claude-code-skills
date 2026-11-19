@@ -37,17 +37,17 @@ check() { # GROUP NAME TEST HINT
 
 printf '%spr-evidence doctor%s  (%s %s)\n' "$B" "$X" "$os" "$(uname -m)"
 echo "core: stills, video encoding, the phone-playback gate"
-check core "bash 3.2+" "true" ""
 check core "ffmpeg with libx264" "ffmpeg -hide_banner -encoders | grep libx264" "$(pkg ffmpeg ffmpeg)"
 check core "ffprobe" "command -v ffprobe" "$(pkg ffmpeg ffmpeg)"
-check core "perl with Time::HiRes" "perl -MTime::HiRes -e1" "$(pkg perl perl)"
-check core "jq" "command -v jq" "$(pkg jq jq)"
 check core "uv (runs evidence_img.py)" "command -v uv" "curl -LsSf https://astral.sh/uv/install.sh | sh"
 if [ "$os" != Darwin ]; then
   check core "a monospace font (fontconfig)" "fc-match -f '%{file}' monospace | grep ." "$(pkg fontconfig 'fontconfig fonts-dejavu-core')"
 fi
 echo "terminal: CLIs and TUIs"
-check terminal "shux" "command -v shux" "curl -sSfL https://shux.pages.dev/install.sh | sh"
+shux_bin=${SHUX_BIN:-shux}
+check terminal "shux ($shux_bin)" "command -v \"$shux_bin\"" "curl -sSfL https://shux.pages.dev/install.sh | sh"
+check terminal "perl with Time::HiRes (record.sh, observe.sh)" "perl -MTime::HiRes -e1" "$(pkg perl perl)"
+check terminal "jq" "command -v jq" "$(pkg jq jq)"
 echo "web: browser UIs"
 check web "agent-browser" "command -v agent-browser" "npm install -g agent-browser && agent-browser install"
 echo "publish: one PR comment with uploaded files"

@@ -30,7 +30,8 @@
 
 ## Terminal capture with shux
 
-Use the shux skill for session basics. The capture calls:
+These calls are all the capture needs; for more, the shux skill if installed,
+else `shux --help` and `shux <verb> --help`.
 
 ```bash
 W=$(mktemp -d); export XDG_RUNTIME_DIR="$W/rt"         # private daemon
@@ -53,8 +54,6 @@ shux session kill ev && shux daemon stop                # leave nothing running
   (`printf 'DONE-%s\n' "$id"`). Never `sleep` and hope.
 - Read the capture's text before snapshotting: no `Loading…`, no tofu, no
   wrapped line hiding the point (widen the pane instead).
-- **Inside a shux pane, `SHUX=1` is set.** Scripts here read `SHUX_BIN` for the
-  binary, never `SHUX`.
 
 ## Video: driver plus observer
 
@@ -125,9 +124,6 @@ ffmpeg -i in.mp4 -filter_complex "[0]trim=0:12,setpts=PTS-STARTPTS[p1];\
 
 ## Frame hygiene
 
-- Read every PNG back before using it.
 - Save each frame's text (`shux pane capture`) beside it and pass those files
   to `check_evidence.sh`; it greps them for home paths and the host name.
-- Strip what must not leak: paths under a home directory, host names, tokens,
-  third-party names. Demos run from a `mktemp -d` cwd.
 - Never edit a script while it is running.

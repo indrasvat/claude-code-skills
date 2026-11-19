@@ -119,6 +119,9 @@ expect "strips query/fragment and skips code blocks" 0 '^check_evidence: PASS' -
 # shellcheck disable=SC2016  # literal markdown, backticks included
 printf '![s](./still.png)\n\n    ![x](./indented.png)\n\n````\n```\n![y](./inner.png)\n```\n````\n' >code.md
 expect "skips indented and nested fenced code" 0 '^check_evidence: PASS' -- bash "$S/scripts/check_evidence.sh" code.md
+# shellcheck disable=SC2016  # literal markdown, backticks included
+printf '````\n````~\n````\n![live](./live-missing.png)\n' >fence.md
+expect "a fence closes only on a bare run of its own character" 1 'live-missing.png' -- bash "$S/scripts/check_evidence.sh" fence.md
 printf '![f](file:///etc/a.png)\n' >file.md
 expect "rejects a file:// reference" 1 'local path' -- bash "$S/scripts/check_evidence.sh" file.md
 printf 'token ghp_%s\n' "abcdefghijklmnopqrstuvwxyz0123456789" >tok.md

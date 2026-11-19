@@ -32,8 +32,19 @@ bad() { printf 'check_evidence: FAIL %s\n' "$*" >&2; fail=1; }
 refs=$(python3 -I - "$md" <<'EOF'
 import re, sys
 text = open(sys.argv[1], encoding="utf-8").read()
-# Fenced code: a closing fence is at least as long as the opening one.
-text = re.sub(r"(?ms)^ {0,3}(`{3,}|~{3,}).*?(^ {0,3}\1[`~]*[ \t]*$|\Z)", "", text)
+# Fenced code (CommonMark): closed only by a bare run of the same character,
+# at least as long as the opener; an unclosed fence runs to the end.
+kept, fence = [], None
+for line in text.split("\n"):
+    m = re.match(r" {0,3}(`{3,}|~{3,})(.*)$", line)
+    if fence is None:
+        if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
+            fence = m.group(1)
+        else:
+            kept.append(line)
+    elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not m.group(2).strip():
+        fence = None
+text = "\n".join(kept)
 text = re.sub(r"(?m)^(?: {4}|\t).*$", "", text)                       # indented code
 text = re.sub(r"`[^`\n]*`", "", text)                                  # inline code
 dest = r"(<[^>\n]+>|[^\s)]+)"

@@ -50,6 +50,8 @@ ffmpeg -v error -y -f lavfi -i testsrc2=s=320x240:r=15 -t 2 \
 expect "rejects a variable frame rate" 1 'frame rate' -- bash "$S/scripts/check_video.sh" vfr.mp4
 ffmpeg -v error -y -i good.mp4 -c copy -metadata title=moov mkv.mkv && mv mkv.mkv mkv.mp4
 expect "rejects a Matroska file named .mp4" 1 'container' -- bash "$S/scripts/check_video.sh" mkv.mp4
+ffmpeg -v error -y -i good.mp4 -c copy -f mov -movflags +faststart qt.mp4
+expect "rejects a QuickTime file named .mp4" 1 'QuickTime' -- bash "$S/scripts/check_video.sh" qt.mp4
 ffmpeg -v error -y -f lavfi -i testsrc2=s=640x360:r=30 -t 4 "${ENC[@]}" -level:v 4.2 -movflags +faststart big.mp4
 cp big.mp4 corrupt.mp4
 python3 -I -c 'import sys,os; p=sys.argv[1]; n=os.path.getsize(p); f=open(p,"r+b"); f.seek(n*6//10); f.write(bytes(n-n*6//10))' corrupt.mp4
@@ -91,6 +93,9 @@ expect "builds a sheet of a 1 s, 4 fps clip" 0 'wrote' -- \
   uv run -q "$S/scripts/evidence_video.py" sheet short.mp4 -o short-sheet.png --frames 9
 expect "refuses a reversed mark range" 2 'from' -- \
   uv run -q "$S/scripts/evidence_video.py" mark good.mp4 -o rev.mp4 --from 1.5 --to 0.5 --box 1,1,9,9,bad,x
+ffmpeg -v error -y -f lavfi -i testsrc2=s=1920x480:r=15:d=1 "${ENC[@]}" wide.mp4
+expect "stacks two 1920x480 clips at a level its own gate accepts" 0 '^check_video: PASS' -- \
+  uv run -q "$S/scripts/evidence_video.py" stack wide.mp4 wide.mp4 -o wide-stack.mp4 --labels a b
 
 section "check_evidence.sh: the gate before posting"
 cp good.mp4 demo.mp4 && cp marked.png still.png
@@ -111,6 +116,11 @@ expect "finds HTML and reference-style artifacts" 1 'artifacts=3' -- bash "$S/sc
 # shellcheck disable=SC2016  # literal markdown, backticks included
 printf '![d](./demo.mp4?raw=1#t=2)\n![s](<./still.png> "a title")\n\n```\n![x](./not-real.png)\n```\n' >tricky.md
 expect "strips query/fragment and skips code blocks" 0 '^check_evidence: PASS' -- bash "$S/scripts/check_evidence.sh" tricky.md
+# shellcheck disable=SC2016  # literal markdown, backticks included
+printf '![s](./still.png)\n\n    ![x](./indented.png)\n\n````\n```\n![y](./inner.png)\n```\n````\n' >code.md
+expect "skips indented and nested fenced code" 0 '^check_evidence: PASS' -- bash "$S/scripts/check_evidence.sh" code.md
+printf '![f](file:///etc/a.png)\n' >file.md
+expect "rejects a file:// reference" 1 'local path' -- bash "$S/scripts/check_evidence.sh" file.md
 printf 'token ghp_%s\n' "abcdefghijklmnopqrstuvwxyz0123456789" >tok.md
 expect "rejects a token-shaped string" 1 'token' -- bash "$S/scripts/check_evidence.sh" tok.md
 expect "fails closed when HOME is unset" 1 'HOME' -- env -u HOME bash "$S/scripts/check_evidence.sh" ev.md
@@ -119,6 +129,8 @@ expect "usage error exits 2" 2 'usage' -- bash "$S/scripts/check_evidence.sh"
 section "doctor.sh: the preflight contract"
 expect "prints the contract line and the skill dir" 0 "^doctor: core=ok .* skill=$S\$" -- bash "$S/scripts/doctor.sh"
 expect "checks the shux binary SHUX_BIN names" 0 'terminal=missing' -- env SHUX_BIN=/no/such/shux bash "$S/scripts/doctor.sh"
+# shellcheck disable=SC2016  # the literal string is the point: it must not run
+expect "treats SHUX_BIN as a name, never as code" 0 'terminal=missing' -- env SHUX_BIN='$(printf shux)' bash "$S/scripts/doctor.sh"
 
 section "record.sh + observe.sh over shux"
 if command -v shux >/dev/null; then

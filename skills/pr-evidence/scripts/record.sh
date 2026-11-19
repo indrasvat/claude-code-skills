@@ -74,7 +74,7 @@ rate=$(awk -v c="$captured" -v x="$speed" 'BEGIN{printf "%.4f", c*x}')
 IFS=x read -r w h < <(ffprobe -v error -select_streams v:0 -show_entries stream=width,height \
   -of csv=s=x:p=0 "$frames/00000.png")
 level=4.2
-[ $(( ((w + 15) / 16) * ((h + 15) / 16) )) -gt 8192 ] && level=5.1
+[ $(( ((w + 15) / 16) * ((h + 15) / 16) )) -gt 8704 ] && level=5.1
 ffmpeg -hide_banner -loglevel error -y -framerate "$rate" -i "$frames/%05d.png" \
   -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black" \
   -c:v libx264 -profile:v high -level:v "$level" -preset slow -crf 16 \

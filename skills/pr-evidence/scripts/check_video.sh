@@ -36,6 +36,7 @@ probe() { ffprobe -v error -select_streams v:0 -show_entries "stream=$1" -of def
 codec=$(probe codec_name || true)
 [ -n "$codec" ] || { echo "check_video: FAIL $v has no video stream ffprobe can read" >&2; exit 2; }
 format=$(ffprobe -v error -show_entries format=format_name -of default=nw=1:nk=1 "$v")
+brand=$(ffprobe -v error -show_entries format_tags=major_brand -of default=nw=1:nk=1 "$v" | tr -d ' ')
 pix=$(probe pix_fmt)
 level=$(probe level)
 w=$(probe width)
@@ -49,7 +50,7 @@ dur=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$v")
 first_box() {
   local off=0 total size type n=0
   total=$(wc -c <"$v" | tr -d ' ')
-  while [ "$off" -lt "$total" ] && [ "$n" -lt 64 ]; do
+  while [ "$off" -lt "$total" ] && [ "$n" -lt 4096 ]; do
     # shellcheck disable=SC2046  # split od's bytes into positional args
     set -- $(od -An -tu1 -j "$off" -N 16 "$v")
     [ $# -ge 8 ] || return 0
@@ -64,7 +65,9 @@ first_box() {
   done
 }
 
-case ",$format," in *,mp4,*) ;; *) bad "container $format is not MP4: remux with ffmpeg -i in -c copy -movflags +faststart out.mp4" ;; esac
+remux="remux with ffmpeg -i in -c copy -f mp4 -movflags +faststart out.mp4"
+case ",$format," in *,mp4,*) ;; *) bad "container $format is not MP4: $remux" ;; esac
+[ "$brand" != qt ] || bad "a QuickTime (.mov) file, not MP4: $remux"
 [ "$codec" = h264 ] || bad "codec $codec: re-encode with -c:v libx264 -profile:v high"
 [ "$pix" = yuv420p ] || bad "pix_fmt $pix: add -pix_fmt yuv420p (and -color_range tv for yuvj input)"
 if [ $((w % 2)) -ne 0 ] || [ $((h % 2)) -ne 0 ]; then
@@ -92,7 +95,8 @@ else
   rate=$((mbs * num / (den > 0 ? den : 1)))
   [ "$rate" -le "$maxmbps" ] || bad "${w}x${h} at $rfr fps is $rate macroblocks/s, over level $level's $maxmbps: lower -r or scale down"
 fi
-# Phones decode up to 4.2 everywhere; 5.1 only when the frame needs it.
+# Phones decode up to 4.2 everywhere; 5.1 only when the frame needs it (over
+# level 4.2's 8704-macroblock frame; record.sh and evidence_video.py match).
 max=42
 [ "$mbs" -gt 8704 ] && max=51
 [ "$level" -le "$max" ] || bad "H.264 level $level for ${w}x${h}: add -level:v $([ "$max" = 42 ] && echo 4.2 || echo 5.1)"

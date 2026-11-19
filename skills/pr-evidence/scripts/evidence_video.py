@@ -74,8 +74,8 @@ def probe(path: str) -> dict[str, float]:
 
 
 def encode_args(w: int, h: int, fps: int) -> list[str]:
-    # Level 4.2 fits up to 8192 macroblocks (about 2.1 MP); 5.1 above. Never 6.x.
-    level = "4.2" if ((w + 15) // 16) * ((h + 15) // 16) <= 8192 else "5.1"
+    # Level 4.2 fits up to 8704 macroblocks (about 2.2 MP); 5.1 above. Never 6.x.
+    level = "4.2" if ((w + 15) // 16) * ((h + 15) // 16) <= 8704 else "5.1"
     return [
         "-r",
         str(fps),

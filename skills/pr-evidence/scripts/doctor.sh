@@ -45,7 +45,8 @@ if [ "$os" != Darwin ]; then
 fi
 echo "terminal: CLIs and TUIs"
 shux_bin=${SHUX_BIN:-shux}
-check terminal "shux ($shux_bin)" "command -v \"$shux_bin\"" "curl -sSfL https://shux.pages.dev/install.sh | sh"
+# shellcheck disable=SC2016  # expanded by check's eval, never re-parsed as code
+check terminal "shux ($shux_bin)" 'command -v "$shux_bin"' "curl -sSfL https://shux.pages.dev/install.sh | sh"
 check terminal "perl with Time::HiRes (record.sh, observe.sh)" "perl -MTime::HiRes -e1" "$(pkg perl perl)"
 check terminal "jq" "command -v jq" "$(pkg jq jq)"
 echo "web: browser UIs"

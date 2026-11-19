@@ -105,7 +105,7 @@ ffmpeg -i in.mp4 -filter_complex "[0]trim=0:12,setpts=PTS-STARTPTS[p1];\
   crosswise (the "before" label lands on "after" frames).
 - Many ffmpeg builds have no `drawtext`. Captions and labels are drawn as
   images (`evidence_video.py mark`, `stack --labels`), never with `drawtext`.
-- `-level:v 4.2` fits frames up to about 2.1 MP (1920×1088); above, 5.1.
+- `-level:v 4.2` fits frames up to 8704 macroblocks (about 2.2 MP); above, 5.1.
 - Then `bash "$S/scripts/check_video.sh" out.mp4` must print PASS.
 
 ## Web, native, phones

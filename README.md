@@ -1,6 +1,6 @@
 # Claude Code Skills
 
-A marketplace of personal [Claude Code](https://claude.ai/code) plugins: 16 skills for AI-assisted dev workflows, plus `dootdashaa`, a glanceable statusline.
+A marketplace of personal [Claude Code](https://claude.ai/code) plugins: 17 skills for AI-assisted dev workflows, plus `dootdashaa`, a glanceable statusline.
 
 ## 🎯 Overview
 
@@ -8,7 +8,7 @@ This repository is a Claude Code marketplace exposing two independently-installa
 
 | Plugin | Install command | What it adds |
 |---|---|---|
-| **indrasvat-skills** | `/plugin install indrasvat-skills@indrasvat-skills` | 16 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, iTerm2 automation, browsing-as-you, skill authoring, …) |
+| **indrasvat-skills** | `/plugin install indrasvat-skills@indrasvat-skills` | 17 skills (CI gating, exec plans, PR shipping, PR evidence, K8s diffing, PRD generation, iTerm2 automation, browsing-as-you, skill authoring, …) |
 | **dootdashaa** | `/plugin install dootdashaa@indrasvat-skills` | Single-line, Nerd-Font-icon statusline. `~9ms` p50 render budget. |
 
 Both share one `/plugin marketplace add` step (see [Installation](#installation)). Each can be installed, updated, and uninstalled on its own.
@@ -17,7 +17,7 @@ Both share one `/plugin marketplace add` step (see [Installation](#installation)
 
 Glanceable, single-line. One carrier per signal (icon, text, or colour — never two). Zero emoji. Pre-computed git cache keeps the hot path under the 300ms Claude Code debounce. See [`plugins/dootdashaa/README.md`](plugins/dootdashaa/README.md) for env-var options and the install / uninstall command list; design report is at [`plugins/dootdashaa/docs/DESIGN.html`](plugins/dootdashaa/docs/DESIGN.html).
 
-### Skills (16 total)
+### Skills (17 total)
 
 #### Universal Dev Workflow (5 new)
 
@@ -124,6 +124,20 @@ One persistent, already-authenticated Chrome that every agent and sub-agent atta
 |-------|---------|-------------|
 | **skillwright** | `/skillwright` | Author skills the harness-engineering way — trigger contract, degree-of-freedom calibration, progressive disclosure, prose→machinery hardening, and this collection's conventions. Auto-loads when you write or improve a skill. |
 
+#### PR Evidence (1 new)
+
+#### 🎞️ **pr-evidence**
+Before/after proof for any non-trivial pull request, posted as one PR comment that a reviewer can trust at a glance, on a phone. Works with any agent (Claude Code, Codex, others that read `SKILL.md`), on macOS and Linux, local or cloud.
+
+**Capabilities:**
+- Picks the medium from the change's nature: marked stills for what a screen shows; video with an on-screen clock or an independent `ps` observer for timing, lifecycle and interaction; numbers for performance
+- Captures the real product on the base and the branch: shux for terminals and TUIs, agent-browser for web, OS recorders for native apps and phone simulators
+- `evidence_img.py` / `evidence_video.py`: zoom, pair and mark stills; stack base over branch, mark a stretch of video, and build frame sheets so an agent can read a video it cannot watch
+- Gates that refuse bad output: `check_video.sh` (plays on iPhone Safari: H.264 level, constant rate, faststart, poster frame) and `check_evidence.sh` (artifacts exist, untracked, no local paths or host names)
+- `doctor.sh` preflight prints the exact install command for anything missing; publishes with `gh pr comment --attach`, never by committing files
+
+**Other agents:** `npx skills add indrasvat/claude-code-skills --skill pr-evidence --global --agent codex` (needs Node 22+; Codex reads `agents/openai.yaml` for its display metadata).
+
 ## Installation
 
 ### Via Claude Code Plugin (Recommended)
@@ -133,7 +147,7 @@ Inside a `claude` session, register the marketplace once and install whichever p
 ```
 /plugin marketplace add indrasvat/claude-code-skills    # once per machine
 
-# 16 skills (CI gating, exec plans, PR shipping, K8s diffing, PRD generation, browsing-as-you, ...)
+# 17 skills (CI gating, exec plans, PR shipping, PR evidence, K8s diffing, PRD generation, browsing-as-you, ...)
 /plugin install indrasvat-skills@indrasvat-skills
 
 # Statusline

@@ -50,3 +50,27 @@ jobs:
       # clicks nothing. No browser, no uv, no deps — python3 ships on ubuntu.
       - name: Run make test-browsing
         run: make test-browsing
+
+  test-pr-evidence:
+    name: Test pr-evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+
+      # The skill's scripts against real tools: ffmpeg for the phone-playback
+      # gate and composition, uv for the Pillow scripts, shux for recording.
+      # uv and shux are pinned; the shux installer verifies its checksum.
+      - name: Install ffmpeg, fonts, uv and shux
+        shell: bash  # -eo pipefail: a failed download fails the step, not just curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg fontconfig fonts-dejavu-core
+          curl -LsSf https://astral.sh/uv/0.13.9/install.sh | sh
+          curl -sSfL https://shux.pages.dev/install.sh | sh -s -- --version v0.57.2 --no-skill
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run make test-pr-evidence
+        env:
+          REQUIRE_SHUX: "1"  # the recorder test must run here, never skip
+        run: make test-pr-evidence

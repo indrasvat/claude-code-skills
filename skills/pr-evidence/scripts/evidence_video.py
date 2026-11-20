@@ -52,7 +52,7 @@ def probe(path: str) -> dict[str, float]:
             "-select_streams",
             "v:0",
             "-show_entries",
-            "stream=width,height,r_frame_rate,duration:format=duration",
+            "stream=width,height,r_frame_rate,duration:stream_side_data=rotation:format=duration",
             "-of",
             "default=nw=1",
             path,
@@ -65,9 +65,13 @@ def probe(path: str) -> dict[str, float]:
         if val and val != "N/A":
             kv.setdefault(k, val)
     num, den = kv["r_frame_rate"].split("/")
+    w, h = int(kv["width"]), int(kv["height"])
+    # ffmpeg decodes a rotated clip upright: size it as displayed, not as coded.
+    if round(float(kv.get("rotation", "0"))) % 180 == 90:
+        w, h = h, w
     return {
-        "w": int(kv["width"]),
-        "h": int(kv["height"]),
+        "w": w,
+        "h": h,
         "fps": int(num) / int(den),
         "dur": float(kv["duration"]),
     }

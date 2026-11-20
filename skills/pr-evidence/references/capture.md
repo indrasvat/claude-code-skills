@@ -82,7 +82,8 @@ bash "$S/scripts/record.sh" -s demo -c 170x36 -o "$W/demo.mp4" -u "$W/stop" -t 1
 - **Probes are read-only.** A probe must never change what it observes: a CLI
   that auto-starts a daemon restarts the very daemon the driver just stopped.
   Query `ps`, a pidfile, or the socket with a short timeout, and report a
-  timeout as "not answering", never "gone".
+  timeout as "not answering", never "gone". `observe.sh` cuts off any probe
+  after `-T` seconds (default 2) and shows "(probe timed out after 2s)".
 - **Size the observer for its worst case**: one line per probe, rows for all
   of them. An overflowing list scrolls the clock off, in the frame that matters.
 - Record base and branch with the same driver, then

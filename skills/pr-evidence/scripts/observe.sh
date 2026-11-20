@@ -5,10 +5,11 @@
 # state over time, not the driver's own account of it.
 #
 # Usage:
-#   observe.sh -u STOPFILE [-i SECONDS] -- 'LABEL::COMMAND' ['LABEL::COMMAND' ...]
+#   observe.sh -u STOPFILE [-i SECONDS] [-T SECONDS] -- 'LABEL::COMMAND' ['LABEL::COMMAND' ...]
 #
 #   -u  stop when this file exists
 #   -i  redraw interval (default 0.5)
+#   -T  cut off a probe after this long, so the clock keeps moving (default 2)
 #
 # Example probes:
 #   'daemon state::ps -o pid=,stat=,command= -p "$(cat "$RT/app.pid")"'
@@ -19,13 +20,13 @@
 # watches (a CLI that auto-starts a daemon restarts the one just stopped).
 set -euo pipefail
 
-stopfile="" interval=0.5
-while getopts "u:i:" opt; do
-  case "$opt" in u) stopfile=$OPTARG ;; i) interval=$OPTARG ;; *) exit 2 ;; esac
+stopfile="" interval=0.5 limit=2
+while getopts "u:i:T:" opt; do
+  case "$opt" in u) stopfile=$OPTARG ;; i) interval=$OPTARG ;; T) limit=$OPTARG ;; *) exit 2 ;; esac
 done
 shift $((OPTIND - 1))
 [ "${1:-}" = "--" ] && shift
-[ -n "$stopfile" ] && [ "$#" -gt 0 ] || { sed -n '2,19p' "$0" >&2; exit 2; }
+[ -n "$stopfile" ] && [ "$#" -gt 0 ] || { sed -n '2,20p' "$0" >&2; exit 2; }
 
 C=$'\e[36m' B=$'\e[1m' D=$'\e[2m' X=$'\e[0m' K=$'\e[K'
 start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time()')
@@ -41,7 +42,13 @@ while [ ! -e "$stopfile" ]; do
       # Clear the blank separator row too: after a resize it still holds
       # text from an earlier layout, and the redraw only clears written rows.
       printf '%s\n%s%s%s%s\n' "$K" "$B" "$label" "$X" "$K"
-      bash -c "$cmd" 2>&1 | head -12 | sed "s/\$/$K/;s/^/  /" || true
+      # Its own process group, so a timeout kills what the probe started too.
+      # shellcheck disable=SC2016  # perl's own variables
+      perl -MTime::HiRes=alarm -e '$t = shift; $p = fork // die "fork: $!";
+        if (!$p) { setpgrp; exec @ARGV or die "exec: $!" }
+        $SIG{ALRM} = sub { kill "KILL", -$p; print "(probe timed out after ${t}s)\n"; exit 124 };
+        alarm $t; waitpid $p, 0; exit $? >> 8' "$limit" bash -c "$cmd" </dev/null 2>&1 |
+        head -12 | sed "s/\$/$K/;s/^/  /" || true
     done
   )
   printf '\e[H%s\e[J' "$out"

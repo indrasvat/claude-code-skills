@@ -96,6 +96,14 @@ expect "refuses a reversed mark range" 2 'from' -- \
 ffmpeg -v error -y -f lavfi -i testsrc2=s=1920x480:r=15:d=1 "${ENC[@]}" wide.mp4
 expect "stacks two 1920x480 clips at a level its own gate accepts" 0 '^check_video: PASS' -- \
   uv run -q "$S/scripts/evidence_video.py" stack wide.mp4 wide.mp4 -o wide-stack.mp4 --labels a b
+# Phones store portrait video as landscape pixels plus a rotation; ffmpeg turns
+# the frames upright, so sizes must come from the displayed frame.
+ffmpeg -v error -y -f lavfi -i testsrc2=s=200x360:r=15:d=1 "${ENC[@]}" tall.mp4
+ffmpeg -v error -y -display_rotation 90 -i tall.mp4 -c copy -movflags +faststart turned.mp4
+expect "stacks a clip whose rotation turns it wider than the other" 0 '^check_video: PASS' -- \
+  uv run -q "$S/scripts/evidence_video.py" stack tall.mp4 turned.mp4 -o turned-stack.mp4 --labels a b
+w=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=nw=1:nk=1 turned-stack.mp4 2>/dev/null)
+check "rotated stack is as wide as the upright frame ($w px)" test "${w:-0}" -eq 360
 
 section "check_evidence.sh: the gate before posting"
 cp good.mp4 demo.mp4 && cp marked.png still.png
@@ -134,6 +142,41 @@ expect "prints the contract line and the skill dir" 0 "^doctor: core=ok .* skill
 expect "checks the shux binary SHUX_BIN names" 0 'terminal=missing' -- env SHUX_BIN=/no/such/shux bash "$S/scripts/doctor.sh"
 # shellcheck disable=SC2016  # the literal string is the point: it must not run
 expect "treats SHUX_BIN as a name, never as code" 0 'terminal=missing' -- env SHUX_BIN='$(printf shux)' bash "$S/scripts/doctor.sh"
+expect "outside a repo, cannot promise a comment will post" 0 'publish=manual' -- env -u GH_REPO bash "$S/scripts/doctor.sh"
+if gh auth status >/dev/null 2>&1; then
+  in_checkout() { (cd "$here" && env -u GH_REPO bash "$S/scripts/doctor.sh"); }
+  expect "in a checkout gh can comment on, publishes with --attach" 0 'publish=attach' -- in_checkout
+else
+  sk "gh not logged in: the publish=attach case"
+fi
+
+section "record.sh + observe.sh: timing"
+# A stand-in shux: frame 1 is red and its snapshot stalls 2 s, the rest are black.
+ffmpeg -v error -y -f lavfi -i color=c=red:s=64x64 -frames:v 1 red.png
+ffmpeg -v error -y -f lavfi -i color=c=black:s=64x64 -frames:v 1 black.png
+cat >fakeshux <<EOF
+#!/usr/bin/env bash
+while [ "\$#" -gt 0 ]; do [ "\$1" = -o ] && out=\$2; shift; done
+n=\$(cat "$W/fake.n" 2>/dev/null || echo 0); echo \$((n + 1)) >"$W/fake.n"
+if [ "\$n" -eq 1 ]; then cp "$W/red.png" "\$out"; sleep 2; else cp "$W/black.png" "\$out"; fi
+EOF
+chmod +x fakeshux
+red_seconds() { # MP4: how long the red frame is on screen, sampled at 10 fps
+  ffmpeg -v error -i "$1" -vf fps=10,scale=1:1 -f rawvideo -pix_fmt rgb24 - |
+    od -An -v -tu1 | tr -s ' ' '\n' | grep . |
+    awk 'NR%3==1{r=$1} NR%3==2{if (r>128 && $1<64) n++} END{printf "%.1f", n/10}'
+}
+expect "record.sh encodes a stalled snapshot at its real duration" 0 '^check_video: PASS' -- \
+  env SHUX_BIN="$W/fakeshux" bash "$S/scripts/record.sh" -s fake -o stall.mp4 -t 4 -f 4 -x 1
+red=$(red_seconds stall.mp4)
+check "the stalled frame stays on screen for the stall ($red s, want >= 1.8)" awk -v r="${red:-0}" 'BEGIN{exit !(r>=1.8)}'
+( sleep 3; touch "$W/slow.stop" ) &
+t0=$SECONDS
+bash "$S/scripts/observe.sh" -u "$W/slow.stop" -i 0.2 -T 1 -- 'slow::sleep 8; echo late' >obs.out 2>&1
+took=$((SECONDS - t0)); wait
+check "observe.sh cuts off a slow probe and names it" grep -q 'timed out after 1s' obs.out
+check "observe.sh runs to its stop file past a slow probe (stopped in ${took}s, want 3-6)" \
+  test "$took" -ge 3 -a "$took" -le 6
 
 section "record.sh + observe.sh over shux"
 if command -v shux >/dev/null; then

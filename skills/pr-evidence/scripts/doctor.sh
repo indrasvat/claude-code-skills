@@ -8,7 +8,9 @@
 #   doctor: core=ok|missing terminal=ok|missing web=ok|missing publish=attach|manual skill=<dir>
 # Exit 0 when core (stills + video encoding + gating) works, 1 when it does not.
 # terminal = shux capture; web = agent-browser; publish=attach means
-# `gh pr comment --attach` is available and gh is logged in.
+# `gh pr comment --attach` is available, gh is logged in, and gh resolves the
+# target repo (this checkout, or $GH_REPO) and it is not archived. Run it from
+# the PR's checkout.
 set -uo pipefail
 
 skill=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -54,6 +56,10 @@ check web "agent-browser" "command -v agent-browser" "npm install -g agent-brows
 echo "publish: one PR comment with uploaded files"
 check publish "gh with --attach" "gh pr comment --help | grep -- --attach" "upgrade gh (needs a release with --attach): $(pkg gh gh)"
 check publish "gh logged in" "gh auth status" "gh auth login (or set GH_TOKEN)"
+# shellcheck disable=SC2016  # expanded by check's eval
+check publish "gh can comment on the target repo (not archived)" \
+  '[ "$(gh repo view --json isArchived -q .isArchived)" = false ]' \
+  "run from the PR's checkout, or set GH_REPO=owner/repo"
 
 printf 'doctor: core=%s terminal=%s web=%s publish=%s skill=%s\n' "$core" "$terminal" "$web" "$publish" "$skill"
 [ "$core" = ok ]

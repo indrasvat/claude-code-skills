@@ -13,7 +13,9 @@ No transcript, no test lists, no "CI green": the PR body and checks carry those.
 
 Run `doctor.sh`; its `publish=` field picks the route.
 
-1. **`publish=attach`:** gh has `--attach` and is logged in.
+1. **`publish=attach`:** gh has `--attach`, is logged in, and resolves the
+   target repo (run doctor from the PR's checkout, or set `GH_REPO`), which
+   is not archived.
    `gh pr comment N --body-file evidence.md --attach ./demo.mp4 --attach ./a.png`.
    Each `![…](./a.png)` is rewritten to the uploaded asset, a video becomes a
    player, and unreferenced files are appended. The PR body itself:

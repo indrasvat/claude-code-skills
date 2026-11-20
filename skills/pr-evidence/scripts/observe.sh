@@ -27,6 +27,8 @@ done
 shift $((OPTIND - 1))
 [ "${1:-}" = "--" ] && shift
 [ -n "$stopfile" ] && [ "$#" -gt 0 ] || { sed -n '2,20p' "$0" >&2; exit 2; }
+awk -v t="$limit" 'BEGIN{exit !(t ~ /^[0-9]*\.?[0-9]+$/ && t > 0)}' ||
+  { echo "observe.sh: -T must be a positive number of seconds, got '$limit'" >&2; exit 2; }
 
 C=$'\e[36m' B=$'\e[1m' D=$'\e[2m' X=$'\e[0m' K=$'\e[K'
 start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time()')
@@ -42,12 +44,16 @@ while [ ! -e "$stopfile" ]; do
       # Clear the blank separator row too: after a resize it still holds
       # text from an earlier layout, and the redraw only clears written rows.
       printf '%s\n%s%s%s%s\n' "$K" "$B" "$label" "$X" "$K"
-      # Its own process group, so a timeout kills what the probe started too.
+      # Its own process group (set on both sides of the fork, so the group
+      # exists before any kill), killed on timeout and again when the probe
+      # exits: a child it left running would hold the pipe and the redraw.
       # shellcheck disable=SC2016  # perl's own variables
       perl -MTime::HiRes=alarm -e '$t = shift; $p = fork // die "fork: $!";
         if (!$p) { setpgrp; exec @ARGV or die "exec: $!" }
+        setpgrp $p, $p;
         $SIG{ALRM} = sub { kill "KILL", -$p; print "(probe timed out after ${t}s)\n"; exit 124 };
-        alarm $t; waitpid $p, 0; exit $? >> 8' "$limit" bash -c "$cmd" </dev/null 2>&1 |
+        alarm $t; waitpid $p, 0; $rc = $? >> 8; alarm 0; kill "KILL", -$p; exit $rc' \
+        "$limit" bash -c "$cmd" </dev/null 2>&1 |
         head -12 | sed "s/\$/$K/;s/^/  /" || true
     done
   )

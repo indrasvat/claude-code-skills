@@ -177,6 +177,22 @@ took=$((SECONDS - t0)); wait
 check "observe.sh cuts off a slow probe and names it" grep -q 'timed out after 1s' obs.out
 check "observe.sh runs to its stop file past a slow probe (stopped in ${took}s, want 3-6)" \
   test "$took" -ge 3 -a "$took" -le 6
+# A probe that exits but leaves a child holding its output must not hold the redraw.
+( sleep 3; touch "$W/bg.stop" ) &
+t0=$SECONDS
+bash "$S/scripts/observe.sh" -u "$W/bg.stop" -i 0.2 -T 1 -- 'bg::sleep 9 & echo started' >bg.out 2>&1
+took=$((SECONDS - t0)); wait
+check "observe.sh is not held by a child a probe left running (stopped in ${took}s, want 3-6)" \
+  test "$took" -ge 3 -a "$took" -le 6
+( sleep 2; touch "$W/t0.stop" ) &
+expect "observe.sh refuses -T 0, which would disable the cutoff" 2 '-T must be' -- \
+  bash "$S/scripts/observe.sh" -u "$W/t0.stop" -T 0 -- 'x::true'
+wait
+rec=$(env SHUX_BIN="$W/fakeshux" bash "$S/scripts/record.sh" -s fake -o len.mp4 -t 3 -f 1 -x 1.5 2>&1 | tail -1)
+want=$(awk '{for (i = 1; i < NF; i++) if ($i == "over") { sub("s", "", $(i + 1)); print $(i + 1) / 1.5 }}' <<<"$rec")
+got=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 len.mp4 2>/dev/null)
+check "record.sh plays for the recorded time / speed (${got:-?} s, want ${want:-?} s)" \
+  awk -v g="${got:-0}" -v w="${want:--9}" 'BEGIN{d = g - w; exit !(d < 0.25 && d > -0.25)}'
 
 section "record.sh + observe.sh over shux"
 if command -v shux >/dev/null; then

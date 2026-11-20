@@ -87,8 +87,10 @@ IFS=x read -r w h < <(ffprobe -v error -select_streams v:0 -show_entries stream=
   -of csv=s=x:p=0 "$frames/00000.png")
 level=4.2
 [ $(( ((w + 15) / 16) * ((h + 15) / 16) )) -gt 8704 ] && level=5.1
+# -t: the demuxer holds the repeated last file for one more span; cut it off.
+length=$(awk -v e="$elapsed" -v x="$speed" 'BEGIN{printf "%.3f", e/x}')
 ffmpeg -hide_banner -loglevel error -y -f concat -safe 0 -i "$frames/list.txt" \
-  -vf "fps=$rate,pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black" \
+  -vf "fps=$rate,pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black" -t "$length" \
   -c:v libx264 -profile:v high -level:v "$level" -preset slow -crf 16 \
   -pix_fmt yuv420p -movflags +faststart "$out"
 bash "$(dirname "$0")/check_video.sh" "$out"
